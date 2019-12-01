@@ -86,7 +86,7 @@ class Debugger(object):
             cv2.waitKey()
 
     def add_blend_img(self, back, fore, img_id='blend', trans=0.7):
-        if self.theme == 'white':
+        if self.theme == 'white':  # default white
             fore = 255 - fore
         if fore.shape[0] != back.shape[0] or fore.shape[0] != back.shape[1]:
             fore = cv2.resize(fore, (back.shape[1], back.shape[0]))
@@ -180,8 +180,10 @@ class Debugger(object):
         txt = '{}{:.1f}'.format(self.names[cat], conf)
         font = cv2.FONT_HERSHEY_SIMPLEX
         cat_size = cv2.getTextSize(txt, font, 0.5, 2)[0]
+        # draw a box
         cv2.rectangle(
             self.imgs[img_id], (bbox[0], bbox[1]), (bbox[2], bbox[3]), c, 2)
+        # draw class name
         if show_txt:
             cv2.rectangle(self.imgs[img_id],
                           (bbox[0], bbox[1] - cat_size[1] - 2),

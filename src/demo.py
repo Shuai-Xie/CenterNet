@@ -92,6 +92,6 @@ if __name__ == '__main__':
         '--demo', '../images',
         '--debug', '2'
     ]
-    opt = opts().init(hg_args)
+    opt = opts().init(resdcn18_args)
     pprint(vars(opt))
     demo(opt)  # change debug from 0->1

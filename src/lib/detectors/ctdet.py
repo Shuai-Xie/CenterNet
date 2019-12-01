@@ -54,7 +54,7 @@ class CtdetDetector(BaseDetector):
         """
         dets = dets.detach().cpu().numpy()
         dets = dets.reshape(1, -1, dets.shape[2])
-        dets = ctdet_post_process(
+        dets = ctdet_post_process(  # affine transform
             dets.copy(), [meta['c']], [meta['s']],
             meta['out_height'], meta['out_width'], self.opt.num_classes)
         for j in range(1, self.num_classes + 1):
@@ -79,9 +79,13 @@ class CtdetDetector(BaseDetector):
                 results[j] = results[j][keep_inds]
         return results
 
+    # Note: debug and show_results have 2 different thresh
+    # debug: opt.center_thresh = 0.1
+    # show_results: opt.vis_thresh = 0.3
+
     def debug(self, debugger, images, dets, output, scale=1, img_name=None):
         detection = dets.detach().cpu().numpy().copy()
-        detection[:, :, :4] *= self.opt.down_ratio  # scale to ori size
+        detection[:, :, :4] *= self.opt.down_ratio  # scale to 4x, but not to ori img size
         for i in range(1):
             img = images[i].detach().cpu().numpy().transpose(1, 2, 0)  # h,w,3
             img = ((img * self.std + self.mean) * 255).astype(np.uint8)  # recover to 255 img
@@ -90,11 +94,11 @@ class CtdetDetector(BaseDetector):
             out_img_id = '{}_out_pred_{:.1f}'.format(img_name, scale) if img_name else 'out_pred_{:.1f}'.format(scale)
             debugger.add_blend_img(back=img, fore=pred, img_id=blend_img_id)
             debugger.add_img(img, img_id=out_img_id)
-            for k in range(len(dets[i])):
+            for k in range(len(dets[i])):  # i:img, k:box
                 if detection[i, k, 4] > self.opt.center_thresh:
-                    debugger.add_coco_bbox(detection[i, k, :4],
-                                           detection[i, k, -1],
-                                           detection[i, k, 4],
+                    debugger.add_coco_bbox(bbox=detection[i, k, :4],
+                                           cat=detection[i, k, -1],
+                                           conf=detection[i, k, 4],
                                            img_id=out_img_id)
             # add: save all
             debugger.save_img(imgId=blend_img_id, path=self.opt.debug_dir)

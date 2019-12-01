@@ -149,6 +149,7 @@ class BaseDetector(object):
                 # debug img, add pred_blend_img
                 self.debug(debugger, images, dets, output, scale, img_name)
 
+            # affine transform
             dets = self.post_process(dets, meta, scale)
             torch.cuda.synchronize()
             post_process_time = time.time()
@@ -156,6 +157,7 @@ class BaseDetector(object):
 
             detections.append(dets)
 
+        # merge_outputs, use soft nms
         results = self.merge_outputs(detections)
         torch.cuda.synchronize()
         end_time = time.time()
@@ -165,6 +167,7 @@ class BaseDetector(object):
         if self.opt.debug >= 1:
             # pass one more param: img_name, to save img
             self.show_results(debugger, image, results, img_name)
+        exit(0)
 
         return {
             'results': results,
