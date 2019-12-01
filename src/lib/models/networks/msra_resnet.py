@@ -25,6 +25,7 @@ model_urls = {
     'resnet152': 'https://download.pytorch.org/models/resnet152-b121ed2d.pth',
 }
 
+
 def conv3x3(in_planes, out_planes, stride=1):
     """3x3 convolution with padding"""
     return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride,
@@ -108,46 +109,45 @@ class PoseResNet(nn.Module):
 
     def __init__(self, block, layers, heads, head_conv, **kwargs):
         self.inplanes = 64
-        self.deconv_with_bias = False
         self.heads = heads
+        self.deconv_with_bias = False
 
         super(PoseResNet, self).__init__()
-        self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3,
-                               bias=False)
+        self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3, bias=False)  # 1/2
         self.bn1 = nn.BatchNorm2d(64, momentum=BN_MOMENTUM)
         self.relu = nn.ReLU(inplace=True)
-        self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+        self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)  # 1/4
         self.layer1 = self._make_layer(block, 64, layers[0])
-        self.layer2 = self._make_layer(block, 128, layers[1], stride=2)
-        self.layer3 = self._make_layer(block, 256, layers[2], stride=2)
-        self.layer4 = self._make_layer(block, 512, layers[3], stride=2)
+        self.layer2 = self._make_layer(block, 128, layers[1], stride=2)  # 1/8
+        self.layer3 = self._make_layer(block, 256, layers[2], stride=2)  # 1/16
+        self.layer4 = self._make_layer(block, 512, layers[3], stride=2)  # 1/32
 
-        # used for deconv layers
-        self.deconv_layers = self._make_deconv_layer(
-            3,
-            [256, 256, 256],
-            [4, 4, 4],
+        # used for deconv layers, x8
+        self.deconv_layers = self._make_deconv_layer(  # 1/4
+            num_layers=3,  # 3 layers deconv
+            num_filters=[256, 256, 256],  # channels
+            num_kernels=[4, 4, 4],  # kernel size
         )
         # self.final_layer = []
 
         for head in sorted(self.heads):
-          num_output = self.heads[head]
-          if head_conv > 0:
-            fc = nn.Sequential(
-                nn.Conv2d(256, head_conv,
-                  kernel_size=3, padding=1, bias=True),
-                nn.ReLU(inplace=True),
-                nn.Conv2d(head_conv, num_output, 
-                  kernel_size=1, stride=1, padding=0))
-          else:
-            fc = nn.Conv2d(
-              in_channels=256,
-              out_channels=num_output,
-              kernel_size=1,
-              stride=1,
-              padding=0
-          )
-          self.__setattr__(head, fc)
+            num_output = self.heads[head]
+            if head_conv > 0:
+                fc = nn.Sequential(
+                    nn.Conv2d(256, head_conv,
+                              kernel_size=3, padding=1, bias=True),
+                    nn.ReLU(inplace=True),
+                    nn.Conv2d(head_conv, num_output,
+                              kernel_size=1, stride=1, padding=0))
+            else:
+                fc = nn.Conv2d(
+                    in_channels=256,
+                    out_channels=num_output,
+                    kernel_size=1,
+                    stride=1,
+                    padding=0
+                )
+            self.__setattr__(head, fc)
 
         # self.final_layer = nn.ModuleList(self.final_layer)
 
@@ -169,16 +169,18 @@ class PoseResNet(nn.Module):
         return nn.Sequential(*layers)
 
     def _get_deconv_cfg(self, deconv_kernel, index):
-        if deconv_kernel == 4:
+        """ get padding, output_padding by deconv_kernel size """
+        # conv_trans rule: kernel = 2*padding + 2 - output_padding
+        # output_padding is necessary when kernel is odd
+        if deconv_kernel == 4:  # kernel size
             padding = 1
             output_padding = 0
-        elif deconv_kernel == 3:
+        elif deconv_kernel == 3:  # odd kernel
             padding = 1
             output_padding = 1
         elif deconv_kernel == 2:
             padding = 0
             output_padding = 0
-
         return deconv_kernel, padding, output_padding
 
     def _make_deconv_layer(self, num_layers, num_filters, num_kernels):
@@ -189,16 +191,15 @@ class PoseResNet(nn.Module):
 
         layers = []
         for i in range(num_layers):
-            kernel, padding, output_padding = \
-                self._get_deconv_cfg(num_kernels[i], i)
-
+            kernel, padding, output_padding = self._get_deconv_cfg(num_kernels[i], i)
             planes = num_filters[i]
+            # add CBR, conv_trans
             layers.append(
                 nn.ConvTranspose2d(
                     in_channels=self.inplanes,
                     out_channels=planes,
                     kernel_size=kernel,
-                    stride=2,
+                    stride=2,  # x2
                     padding=padding,
                     output_padding=output_padding,
                     bias=self.deconv_with_bias))
@@ -242,19 +243,19 @@ class PoseResNet(nn.Module):
                     nn.init.constant_(m.bias, 0)
             # print('=> init final conv weights from normal distribution')
             for head in self.heads:
-              final_layer = self.__getattr__(head)
-              for i, m in enumerate(final_layer.modules()):
-                  if isinstance(m, nn.Conv2d):
-                      # nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
-                      # print('=> init {}.weight as normal(0, 0.001)'.format(name))
-                      # print('=> init {}.bias as 0'.format(name))
-                      if m.weight.shape[0] == self.heads[head]:
-                          if 'hm' in head:
-                              nn.init.constant_(m.bias, -2.19)
-                          else:
-                              nn.init.normal_(m.weight, std=0.001)
-                              nn.init.constant_(m.bias, 0)
-            #pretrained_state_dict = torch.load(pretrained)
+                final_layer = self.__getattr__(head)
+                for i, m in enumerate(final_layer.modules()):
+                    if isinstance(m, nn.Conv2d):
+                        # nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+                        # print('=> init {}.weight as normal(0, 0.001)'.format(name))
+                        # print('=> init {}.bias as 0'.format(name))
+                        if m.weight.shape[0] == self.heads[head]:
+                            if 'hm' in head:
+                                nn.init.constant_(m.bias, -2.19)
+                            else:
+                                nn.init.normal_(m.weight, std=0.001)
+                                nn.init.constant_(m.bias, 0)
+            # pretrained_state_dict = torch.load(pretrained)
             url = model_urls['resnet{}'.format(num_layers)]
             pretrained_state_dict = model_zoo.load_url(url)
             print('=> loading pretrained model {}'.format(url))
@@ -272,9 +273,10 @@ resnet_spec = {18: (BasicBlock, [2, 2, 2, 2]),
                152: (Bottleneck, [3, 8, 36, 3])}
 
 
+# normal res
 def get_pose_net(num_layers, heads, head_conv):
-  block_class, layers = resnet_spec[num_layers]
+    block_class, layers = resnet_spec[num_layers]
 
-  model = PoseResNet(block_class, layers, heads, head_conv=head_conv)
-  model.init_weights(num_layers, pretrained=True)
-  return model
+    model = PoseResNet(block_class, layers, heads, head_conv=head_conv)
+    model.init_weights(num_layers, pretrained=True)
+    return model

@@ -29,6 +29,7 @@ model_urls = {
     'resnet152': 'https://download.pytorch.org/models/resnet152-b121ed2d.pth',
 }
 
+
 def conv3x3(in_planes, out_planes, stride=1):
     """3x3 convolution with padding"""
     return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride,
@@ -107,6 +108,7 @@ class Bottleneck(nn.Module):
 
         return out
 
+
 def fill_up_weights(up):
     w = up.weight.data
     f = math.ceil(w.size(2) / 2)
@@ -116,7 +118,8 @@ def fill_up_weights(up):
             w[0, 0, i, j] = \
                 (1 - math.fabs(i / f - c)) * (1 - math.fabs(j / f - c))
     for c in range(1, w.size(0)):
-        w[c, 0, :, :] = w[0, 0, :, :] 
+        w[c, 0, :, :] = w[0, 0, :, :]
+
 
 def fill_fc_weights(layers):
     for m in layers.modules():
@@ -127,6 +130,7 @@ def fill_fc_weights(layers):
             if m.bias is not None:
                 nn.init.constant_(m.bias, 0)
 
+
 class PoseResNet(nn.Module):
 
     def __init__(self, block, layers, heads, head_conv):
@@ -135,45 +139,46 @@ class PoseResNet(nn.Module):
         self.deconv_with_bias = False
 
         super(PoseResNet, self).__init__()
-        self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3,
-                               bias=False)
+        self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3, bias=False)  # 1/2
         self.bn1 = nn.BatchNorm2d(64, momentum=BN_MOMENTUM)
         self.relu = nn.ReLU(inplace=True)
-        self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+        self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)  # 1/4
         self.layer1 = self._make_layer(block, 64, layers[0])
-        self.layer2 = self._make_layer(block, 128, layers[1], stride=2)
-        self.layer3 = self._make_layer(block, 256, layers[2], stride=2)
-        self.layer4 = self._make_layer(block, 512, layers[3], stride=2)
+        self.layer2 = self._make_layer(block, 128, layers[1], stride=2)  # 1/8
+        self.layer3 = self._make_layer(block, 256, layers[2], stride=2)  # 1/16
+        self.layer4 = self._make_layer(block, 512, layers[3], stride=2)  # 1/32
 
-        # used for deconv layers
-        self.deconv_layers = self._make_deconv_layer(
-            3,
-            [256, 128, 64],
-            [4, 4, 4],
+        # used for deconv layers, x8
+        self.deconv_layers = self._make_deconv_layer(  # 1/4
+            num_layers=3,  # 3 layers deconv
+            num_filters=[256, 128, 64],  # todo: right channels of resdcn_18!
+            # num_filters=[256, 256, 256],  # channels
+            num_kernels=[4, 4, 4],  # kernel size
         )
 
-        for head in self.heads:
+        for head in self.heads:  # 3 heads: {'hm': 80, 'wh': 2, 'reg': 2}
             classes = self.heads[head]
             if head_conv > 0:
                 fc = nn.Sequential(
-                  nn.Conv2d(64, head_conv,
-                    kernel_size=3, padding=1, bias=True),
-                  nn.ReLU(inplace=True),
-                  nn.Conv2d(head_conv, classes, 
-                    kernel_size=1, stride=1, 
-                    padding=0, bias=True))
+                    nn.Conv2d(64, head_conv,  # middle layer, head_conv = 64/256
+                              kernel_size=3, padding=1, bias=True),
+                    nn.ReLU(inplace=True),
+                    nn.Conv2d(head_conv, classes,
+                              kernel_size=1, stride=1,
+                              padding=0, bias=True))
                 if 'hm' in head:
                     fc[-1].bias.data.fill_(-2.19)
                 else:
                     fill_fc_weights(fc)
             else:
-                fc = nn.Conv2d(64, classes, 
-                  kernel_size=1, stride=1, 
-                  padding=0, bias=True)
+                fc = nn.Conv2d(64, classes,
+                               kernel_size=1, stride=1,
+                               padding=0, bias=True)
                 if 'hm' in head:
                     fc.bias.data.fill_(-2.19)
                 else:
                     fill_fc_weights(fc)
+
             self.__setattr__(head, fc)
 
     def _make_layer(self, block, planes, blocks, stride=1):
@@ -187,13 +192,16 @@ class PoseResNet(nn.Module):
 
         layers = []
         layers.append(block(self.inplanes, planes, stride, downsample))
-        self.inplanes = planes * block.expansion
+        self.inplanes = planes * block.expansion  # update self.inplanes here
         for i in range(1, blocks):
             layers.append(block(self.inplanes, planes))
 
         return nn.Sequential(*layers)
 
     def _get_deconv_cfg(self, deconv_kernel, index):
+        """ get padding, output_padding by deconv_kernel size """
+        # conv_trans rule: kernel = 2*padding + 2 - output_padding
+        # output_padding is necessary when kernel is odd
         if deconv_kernel == 4:
             padding = 1
             output_padding = 0
@@ -218,23 +226,28 @@ class PoseResNet(nn.Module):
                 self._get_deconv_cfg(num_kernels[i], i)
 
             planes = num_filters[i]
-            fc = DCN(self.inplanes, planes, 
-                    kernel_size=(3,3), stride=1,
-                    padding=1, dilation=1, deformable_groups=1)
+            fc = DCN(in_channels=self.inplanes,  # 512
+                     out_channels=planes,  # 256
+                     kernel_size=(3, 3),
+                     stride=1,
+                     padding=1,
+                     dilation=1,
+                     deformable_groups=1)
             # fc = nn.Conv2d(self.inplanes, planes,
             #         kernel_size=3, stride=1, 
             #         padding=1, dilation=1, bias=False)
             # fill_fc_weights(fc)
-            up = nn.ConvTranspose2d(
-                    in_channels=planes,
-                    out_channels=planes,
-                    kernel_size=kernel,
-                    stride=2,
-                    padding=padding,
-                    output_padding=output_padding,
-                    bias=self.deconv_with_bias)
+            up = nn.ConvTranspose2d(  # same as msra_resnet.py
+                in_channels=planes,  # 256
+                out_channels=planes,  # 256
+                kernel_size=kernel,
+                stride=2,  # x2
+                padding=padding,
+                output_padding=output_padding,
+                bias=self.deconv_with_bias)
             fill_up_weights(up)
 
+            # todo: do dcn before conv_trans
             layers.append(fc)
             layers.append(nn.BatchNorm2d(planes, momentum=BN_MOMENTUM))
             layers.append(nn.ReLU(inplace=True))
@@ -282,9 +295,10 @@ resnet_spec = {18: (BasicBlock, [2, 2, 2, 2]),
                152: (Bottleneck, [3, 8, 36, 3])}
 
 
+# resdcn
 def get_pose_net(num_layers, heads, head_conv=256):
-  block_class, layers = resnet_spec[num_layers]
+    block_class, layers = resnet_spec[num_layers]
 
-  model = PoseResNet(block_class, layers, heads, head_conv=head_conv)
-  model.init_weights(num_layers)
-  return model
+    model = PoseResNet(block_class, layers, heads, head_conv=head_conv)
+    model.init_weights(num_layers)
+    return model
