@@ -66,7 +66,7 @@ class opts(object):
         # model
         self.parser.add_argument('--arch', default='dla_34',
                                  help='model architecture. Currently tested'
-                                      'res_18 | res_101 | resdcn_18 | resdcn_101 |'
+                                      'res_18 | res_101 | resdcn_18 | resdcn_101 |'  # hasn't 50?
                                       'dlav0_34 | dla_34 | hourglass')
         self.parser.add_argument('--head_conv', type=int, default=-1,  # just use default head_conv planes
                                  help='conv layer channels for output head'
@@ -297,6 +297,10 @@ class opts(object):
         return opt
 
     def update_dataset_info_and_set_heads(self, opt, dataset):
+        """
+        :param opt:
+        :param dataset: class in init(), or a class of lib.datsets.dataset.cigar.py
+        """
         # info from dataset dict
         input_h, input_w = dataset.default_resolution
         opt.mean, opt.std = dataset.mean, dataset.std
@@ -403,6 +407,9 @@ class opts(object):
                 'dataset': 'kitti'
             },
         }
+
+        # todo: change dataset settings in cigar.py, Class params
+
         opt = self.parse(args)
         dataset = Struct(default_dataset_info[opt.task])  # make opt task a class instance, task.dataset
         opt.dataset = dataset.dataset

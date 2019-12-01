@@ -3,6 +3,7 @@ from __future__ import division
 from __future__ import print_function
 
 import torch
+from torchsummary import summary
 
 from .networks.msra_resnet import get_pose_net
 from .networks.dlav0 import get_pose_net as get_dlav0
@@ -30,6 +31,10 @@ def model_layers(model):
     print('{:>4} {:<50} {:<30} {}'.format('idx', 'param', 'size', 'grad'))
     for idx, (name, param) in enumerate(model.named_parameters()):  # recurse=True, as net itself is a big module
         print('{:>4} {:<50} {:<30} {}'.format(idx, name, str(param.size()), param.requires_grad))
+
+
+def model_summary(model, input_size):
+    summary(model, input_size, device='cpu')
 
 
 def create_model(arch, heads, head_conv):

@@ -3,7 +3,7 @@ from __future__ import division
 from __future__ import print_function
 
 import _init_paths
-
+from pprint import pprint
 import os
 
 import torch
@@ -13,15 +13,19 @@ from models.model import create_model, load_model, save_model
 from models.data_parallel import DataParallel
 from logger import Logger
 from datasets.dataset_factory import get_dataset
-from trains.train_factory import train_factory
+from trains.train_factory import train_factory  # ModelTrainer class
+from models.model import model_layers, model_summary
 
 
 def main(opt):
     torch.manual_seed(opt.seed)
     torch.backends.cudnn.benchmark = not opt.not_cuda_benchmark and not opt.test
-    Dataset = get_dataset(opt.dataset, opt.task)
+
+    # todo: add cigar dataset here!
+    # Dataset class set by dataset and task name
+    Dataset = get_dataset(opt.dataset, opt.task)  # return Cigar
     opt = opts().update_dataset_info_and_set_heads(opt, Dataset)
-    print(opt)
+    pprint(vars(opt))
 
     logger = Logger(opt)
 
@@ -32,15 +36,20 @@ def main(opt):
     model = create_model(opt.arch, opt.heads, opt.head_conv)
     optimizer = torch.optim.Adam(model.parameters(), opt.lr)
     start_epoch = 0
+
+    # load pretrain model
     if opt.load_model != '':
         model, optimizer, start_epoch = load_model(
             model, opt.load_model, optimizer, opt.resume, opt.lr, opt.lr_step)
 
-    Trainer = train_factory[opt.task]
+    # choose trainer
+    Trainer = train_factory[opt.task]  # task: models, or pose, 3d
+    # define trainer
     trainer = Trainer(opt, model, optimizer)
     trainer.set_device(opt.gpus, opt.chunk_sizes, opt.device)
 
     print('Setting up data...')
+
     val_loader = torch.utils.data.DataLoader(
         Dataset(opt, 'val'),
         batch_size=1,
@@ -66,12 +75,14 @@ def main(opt):
     print('Starting training...')
     best = 1e10
     for epoch in range(start_epoch + 1, opt.num_epochs + 1):
-        mark = epoch if opt.save_all else 'last'
+        mark = epoch if opt.save_all else 'last'  # todo: save all middle model or last
         log_dict_train, _ = trainer.train(epoch, train_loader)
         logger.write('epoch: {} |'.format(epoch))
         for k, v in log_dict_train.items():
             logger.scalar_summary('train_{}'.format(k), v, epoch)
             logger.write('{} {:8f} | '.format(k, v))
+
+        # default val/save intervals = 5
         if opt.val_intervals > 0 and epoch % opt.val_intervals == 0:
             save_model(os.path.join(opt.save_dir, 'model_{}.pth'.format(mark)),
                        epoch, model, optimizer)
@@ -99,5 +110,53 @@ def main(opt):
 
 
 if __name__ == '__main__':
-    opt = opts().parse()
+    resdcn18_args = [
+        'ctdet',
+        '--exp_id', 'cigar_resdcn50',
+        '--arch', 'resdcn_50',
+        '--dataset', 'cigar',
+        '--batch_size', '16',
+        '--lr', '1e-4',
+        '--num_epochs', '70',
+        '--lr_step', '45, 60',
+        # '--input_h', '360',  # screen shot size
+        # '--input_w', '640',
+        '--gpus', '0',
+        '--num_workers', '2',  # if set 4, exceeds!
+        '--save_all',
+    ]
+    dla34_args = [
+        'ctdet',
+        '--exp_id', 'cigar_dla_1x',
+        '--arch', 'dla_34',
+        '--dataset', 'cigar',  # must set dataset here! default is coco
+        '--batch_size', '16',
+        # '--master_batch_size', '16',  # batch size on the master gpu
+        '--lr', '1e-4',
+        '--num_epochs', '70',  # load pretrain, but still start from 1!
+        '--lr_step', '45, 60',
+        # '--input_h', '360',  # screen shot size
+        # '--input_w', '640',
+        '--gpus', '0',
+        '--num_workers', '2',
+        '--save_all',  # save model to disk every 5 epochs
+        '--load_model', '../exp/ctdet/cigar_dla_1x/model_last.pth'  # 25
+    ]
+    hg_args = [
+        'ctdet',
+        '--exp_id', 'cigar_dla_1x',
+        '--arch', 'dla_34',
+        '--dataset', 'cigar',  # must set dataset here! default is coco
+        '--batch_size', '16',
+        # '--master_batch_size', '16',  # batch size on the master gpu
+        '--lr', '1e-4',
+        '--num_epochs', '70',
+        '--lr_step', '45, 60',
+        # '--input_h', '360',  # screen shot size
+        # '--input_w', '640',
+        '--gpus', '0',
+        '--num_workers', '2',
+        '--save_all',  # save model to disk every 5 epochs
+    ]
+    opt = opts().parse(dla34_args)
     main(opt)

@@ -17,23 +17,24 @@ class ModleWithLoss(torch.nn.Module):
 
     def forward(self, batch):
         outputs = self.model(batch['input'])
+        # loss also has forward!
         loss, loss_stats = self.loss(outputs, batch)
         return outputs[-1], loss, loss_stats
 
 
 class BaseTrainer(object):
-    def __init__(
-            self, opt, model, optimizer=None):
+    def __init__(self, opt, model, optimizer=None):
         self.opt = opt
         self.optimizer = optimizer
+        # loss define in opt
         self.loss_stats, self.loss = self._get_losses(opt)
         self.model_with_loss = ModleWithLoss(model, self.loss)
 
     def set_device(self, gpus, chunk_sizes, device):
         if len(gpus) > 1:
-            self.model_with_loss = DataParallel(
-                self.model_with_loss, device_ids=gpus,
-                chunk_sizes=chunk_sizes).to(device)
+            self.model_with_loss = DataParallel(self.model_with_loss,
+                                                device_ids=gpus,
+                                                chunk_sizes=chunk_sizes).to(device)
         else:
             self.model_with_loss = self.model_with_loss.to(device)
 
@@ -43,22 +44,32 @@ class BaseTrainer(object):
                     state[k] = v.to(device=device, non_blocking=True)
 
     def run_epoch(self, phase, epoch, data_loader):
+        """
+        :param phase: train, val
+        :param epoch:
+        :param data_loader: train_loader, val_loader
+        :return:
+        """
         model_with_loss = self.model_with_loss
         if phase == 'train':
-            model_with_loss.train()
+            model_with_loss.train()  # train mode
         else:
             if len(self.opt.gpus) > 1:
                 model_with_loss = self.model_with_loss.module
-            model_with_loss.eval()
+            model_with_loss.eval()  # eval mode
             torch.cuda.empty_cache()
 
         opt = self.opt
         results = {}
         data_time, batch_time = AverageMeter(), AverageMeter()
         avg_loss_stats = {l: AverageMeter() for l in self.loss_stats}
+
+        # iter num of one epoch = len(samples) / batch_size
         num_iters = len(data_loader) if opt.num_iters < 0 else opt.num_iters
         bar = Bar('{}/{}'.format(opt.task, opt.exp_id), max=num_iters)
         end = time.time()
+
+        # iter batch
         for iter_id, batch in enumerate(data_loader):
             if iter_id >= num_iters:
                 break
@@ -67,12 +78,15 @@ class BaseTrainer(object):
             for k in batch:
                 if k != 'meta':
                     batch[k] = batch[k].to(device=opt.device, non_blocking=True)
+
             output, loss, loss_stats = model_with_loss(batch)
             loss = loss.mean()
+
             if phase == 'train':
                 self.optimizer.zero_grad()
                 loss.backward()
                 self.optimizer.step()
+
             batch_time.update(time.time() - end)
             end = time.time()
 

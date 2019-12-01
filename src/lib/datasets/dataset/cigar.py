@@ -11,8 +11,8 @@ import os
 import torch.utils.data as data
 
 
-class COCO(data.Dataset):
-    num_classes = 80
+class Cigar(data.Dataset):
+    num_classes = 20
     default_resolution = [512, 512]
     mean = np.array([0.40789654, 0.44719302, 0.47026115],
                     dtype=np.float32).reshape(1, 1, 3)
@@ -20,48 +20,42 @@ class COCO(data.Dataset):
                    dtype=np.float32).reshape(1, 1, 3)
 
     def __init__(self, opt, split):
-        super(COCO, self).__init__()
-        self.data_dir = os.path.join(opt.data_dir, 'coco')
-        self.img_dir = os.path.join(self.data_dir, '{}2017'.format(split))
+        super(Cigar, self).__init__()
+        dt_name = 'cigar_box'
+        self.data_dir = os.path.join(opt.data_dir, dt_name)
+        self.img_dir = ''  # as file_name is absolute path
+        # self.img_dir = os.path.join(self.data_dir, '{}2017'.format(split))
         if split == 'test':
             self.annot_path = os.path.join(
                 self.data_dir, 'annotations',
-                'image_info_test-dev2017.json').format(split)
+                '{}_{}_{}.json').format(Cigar.num_classes, dt_name, split)
         else:
-            if opt.task == 'exdet':
+            if opt.task == 'exdet':  # train or val
                 self.annot_path = os.path.join(
                     self.data_dir, 'annotations',
-                    'instances_extreme_{}2017.json').format(split)
-            else:
+                    '{}_{}_{}.json').format(Cigar.num_classes, dt_name, split)
+            else:  # ctdet,..?
                 self.annot_path = os.path.join(
                     self.data_dir, 'annotations',
-                    'instances_{}2017.json').format(split)
-        self.max_objs = 128
+                    '{}_{}_{}.json').format(Cigar.num_classes, dt_name, split)
+
+        self.max_objs = 10
+        # self.max_objs = 128
         self.class_name = [
-            '__background__', 'person', 'bicycle', 'car', 'motorcycle', 'airplane',
-            'bus', 'train', 'truck', 'boat', 'traffic light', 'fire hydrant',
-            'stop sign', 'parking meter', 'bench', 'bird', 'cat', 'dog', 'horse',
-            'sheep', 'cow', 'elephant', 'bear', 'zebra', 'giraffe', 'backpack',
-            'umbrella', 'handbag', 'tie', 'suitcase', 'frisbee', 'skis',
-            'snowboard', 'sports ball', 'kite', 'baseball bat', 'baseball glove',
-            'skateboard', 'surfboard', 'tennis racket', 'bottle', 'wine glass',
-            'cup', 'fork', 'knife', 'spoon', 'bowl', 'banana', 'apple', 'sandwich',
-            'orange', 'broccoli', 'carrot', 'hot dog', 'pizza', 'donut', 'cake',
-            'chair', 'couch', 'potted plant', 'bed', 'dining table', 'toilet', 'tv',
-            'laptop', 'mouse', 'remote', 'keyboard', 'cell phone', 'microwave',
-            'oven', 'toaster', 'sink', 'refrigerator', 'book', 'clock', 'vase',
-            'scissors', 'teddy bear', 'hair drier', 'toothbrush']
-        self._valid_ids = [
-            1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13,
-            14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
-            24, 25, 27, 28, 31, 32, 33, 34, 35, 36,
-            37, 38, 39, 40, 41, 42, 43, 44, 46, 47,
-            48, 49, 50, 51, 52, 53, 54, 55, 56, 57,
-            58, 59, 60, 61, 62, 63, 64, 65, 67, 70,
-            72, 73, 74, 75, 76, 77, 78, 79, 80, 81,
-            82, 84, 85, 86, 87, 88, 89, 90]
-        self.cat_ids = {v: i for i, v in enumerate(self._valid_ids)}
-        self.voc_color = [(v // 32 * 64 + 64, (v // 8) % 4 * 64, v % 8 * 32) \
+            '__background__',
+            '大重九_A', '云烟_a', '娇子_B', '中华_B',
+            '利群_a', '黄鹤楼_e', '娇子_F', '云烟_A',
+            '黄鹤楼_h', '黄鹤楼_E', '黄金叶_C', '555_a',
+            '红塔山_b', '玉溪_A', '娇子_K', '黄鹤楼_A',
+            '娇子_E', '天子_a', '天子_A', '王冠_A'
+        ]
+        # _valid_ids same to real cat_id in xx.json
+        self._valid_ids = np.arange(1, 21, dtype=np.int32)
+
+        self.cat_ids = {
+            v: i for i, v in enumerate(self._valid_ids)
+        }
+        self.voc_color = [(v // 32 * 64 + 64, (v // 8) % 4 * 64, v % 8 * 32)
                           for v in range(1, self.num_classes + 1)]
         self._data_rng = np.random.RandomState(123)
         self._eig_val = np.array([0.2141788, 0.01817699, 0.00341571],
@@ -77,7 +71,7 @@ class COCO(data.Dataset):
         self.split = split
         self.opt = opt
 
-        print('==> initializing coco 2017 {} data.'.format(split))
+        print('==> initializing cigar {} data.'.format(split))
         self.coco = coco.COCO(self.annot_path)
         self.images = self.coco.getImgIds()
         self.num_samples = len(self.images)

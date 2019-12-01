@@ -47,7 +47,8 @@ class CtdetLoss(torch.nn.Module):
                     batch['ind'].detach().cpu().numpy(),
                     output['reg'].shape[3], output['reg'].shape[2])).to(opt.device)
 
-            hm_loss += self.crit(output['hm'], batch['hm']) / opt.num_stacks
+            hm_loss += self.crit(output['hm'], batch['hm']) / opt.num_stacks  # 1, hg:2
+
             if opt.wh_weight > 0:
                 if opt.dense_wh:
                     mask_weight = batch['dense_wh_mask'].sum() + 1e-4
@@ -87,9 +88,8 @@ class CtdetTrainer(BaseTrainer):
     def debug(self, batch, output, iter_id):
         opt = self.opt
         reg = output['reg'] if opt.reg_offset else None
-        dets = ctdet_decode(
-            output['hm'], output['wh'], reg=reg,
-            cat_spec_wh=opt.cat_spec_wh, K=opt.K)
+        dets = ctdet_decode(output['hm'], output['wh'], reg=reg,
+                            cat_spec_wh=opt.cat_spec_wh, K=opt.K)
         dets = dets.detach().cpu().numpy().reshape(1, -1, dets.shape[2])
         dets[:, :, :4] *= opt.down_ratio
         dets_gt = batch['meta']['gt_det'].numpy().reshape(1, -1, dets.shape[2])
@@ -98,8 +98,7 @@ class CtdetTrainer(BaseTrainer):
             debugger = Debugger(
                 dataset=opt.dataset, ipynb=(opt.debug == 3), theme=opt.debugger_theme)
             img = batch['input'][i].detach().cpu().numpy().transpose(1, 2, 0)
-            img = np.clip(((
-                                   img * opt.std + opt.mean) * 255.), 0, 255).astype(np.uint8)
+            img = np.clip(((img * opt.std + opt.mean) * 255.), 0, 255).astype(np.uint8)
             pred = debugger.gen_colormap(output['hm'][i].detach().cpu().numpy())
             gt = debugger.gen_colormap(batch['hm'][i].detach().cpu().numpy())
             debugger.add_blend_img(img, pred, 'pred_hm')
