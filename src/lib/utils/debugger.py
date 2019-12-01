@@ -119,10 +119,10 @@ class Debugger(object):
         img = img.copy()
         c, h, w = img.shape[0], img.shape[1], img.shape[2]
         if output_res is None:
-            output_res = (h * self.down_ratio, w * self.down_ratio)
+            output_res = (h * self.down_ratio, w * self.down_ratio)  # ori size
         img = img.transpose(1, 2, 0).reshape(h, w, c, 1).astype(np.float32)
-        colors = np.array(
-            self.colors, dtype=np.float32).reshape(-1, 3)[:c].reshape(1, 1, c, 3)
+        # gen c colors
+        colors = np.array(self.colors, dtype=np.float32).reshape(-1, 3)[:c].reshape(1, 1, c, 3)
         if self.theme == 'white':
             colors = 255 - colors
         color_map = (img * colors).max(axis=2).astype(np.uint8)

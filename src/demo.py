@@ -9,7 +9,6 @@ import cv2
 
 from opts import opts
 from detectors.detector_factory import detector_factory
-from utils.debugger import Debugger
 
 image_ext = ['jpg', 'jpeg', 'png', 'webp']
 video_ext = ['mp4', 'mov', 'avi', 'mkv']
@@ -62,12 +61,13 @@ from pprint import pprint
 if __name__ == '__main__':
     resdcn18_args = [
         'ctdet',  # detector
-        '--exp_id', 'coco_resdcn18',  # experiment, wrt trained model
+        '--exp_id', 'coco_resdcn18_demo',  # experiment, wrt trained model
         '--keep_res',  # keep ori img resolution
         '--load_model', '../models/ctdet_coco_resdcn18.pth',
         '--gpus', '0',
         '--arch', 'resdcn_18',  # num_layer = 18
         '--demo', '../images',  # path to demo images
+        '--debug', '2'
         # '--cat_spec_wh',  # not use class-aware
         # '--head_conv', '-1',  # 64, default setting, heat_conv is ok
         # '--heads' # heads {'hm': 80, 'wh': 2, 'reg': 2}, has set in opts.update_dataset_info_and_set_heads()
@@ -80,8 +80,18 @@ if __name__ == '__main__':
         '--gpus', '0',
         '--arch', 'dla_34',
         '--demo', '../images',
+        '--debug', '2'
     ]
-    opt = opts().init(resdcn18_args)
+    hg_args = [
+        'ctdet',  # detector
+        '--exp_id', 'coco_hg_demo',
+        '--keep_res',  # keep ori img resolution
+        '--load_model', '../models/ctdet_coco_hg.pth',
+        '--gpus', '0',
+        '--arch', 'hourglass',
+        '--demo', '../images',
+        '--debug', '2'
+    ]
+    opt = opts().init(hg_args)
     pprint(vars(opt))
-    exit(0)
     demo(opt)  # change debug from 0->1

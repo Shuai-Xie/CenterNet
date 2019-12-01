@@ -77,6 +77,7 @@ class BaseDetector(object):
         }
         return images, meta
 
+    # abstract func will implement in real detectors
     def process(self, images, return_time=False):
         raise NotImplementedError
 
@@ -86,7 +87,7 @@ class BaseDetector(object):
     def merge_outputs(self, detections):
         raise NotImplementedError
 
-    def debug(self, debugger, images, dets, output, scale=1):
+    def debug(self, debugger, images, dets, output, scale=1, img_name=None):
         raise NotImplementedError
 
     def show_results(self, debugger, image, results, img_name=None):
@@ -145,7 +146,8 @@ class BaseDetector(object):
             dec_time += decode_time - forward_time
 
             if self.opt.debug >= 2:
-                self.debug(debugger, images, dets, output, scale)
+                # debug img, add pred_blend_img
+                self.debug(debugger, images, dets, output, scale, img_name)
 
             dets = self.post_process(dets, meta, scale)
             torch.cuda.synchronize()

@@ -49,6 +49,9 @@ class CtdetDetector(BaseDetector):
             return output, dets
 
     def post_process(self, dets, meta, scale=1):
+        """
+        recover result to ori img size with meta
+        """
         dets = dets.detach().cpu().numpy()
         dets = dets.reshape(1, -1, dets.shape[2])
         dets = ctdet_post_process(
@@ -76,29 +79,35 @@ class CtdetDetector(BaseDetector):
                 results[j] = results[j][keep_inds]
         return results
 
-    def debug(self, debugger, images, dets, output, scale=1):
+    def debug(self, debugger, images, dets, output, scale=1, img_name=None):
         detection = dets.detach().cpu().numpy().copy()
-        detection[:, :, :4] *= self.opt.down_ratio
+        detection[:, :, :4] *= self.opt.down_ratio  # scale to ori size
         for i in range(1):
-            img = images[i].detach().cpu().numpy().transpose(1, 2, 0)
-            img = ((img * self.std + self.mean) * 255).astype(np.uint8)
+            img = images[i].detach().cpu().numpy().transpose(1, 2, 0)  # h,w,3
+            img = ((img * self.std + self.mean) * 255).astype(np.uint8)  # recover to 255 img
             pred = debugger.gen_colormap(output['hm'][i].detach().cpu().numpy())
-            debugger.add_blend_img(img, pred, 'pred_hm_{:.1f}'.format(scale))
-            debugger.add_img(img, img_id='out_pred_{:.1f}'.format(scale))
+            blend_img_id = '{}_pred_hm_{:.1f}'.format(img_name, scale) if img_name else 'pred_hm_{:.1f}'.format(scale)
+            out_img_id = '{}_out_pred_{:.1f}'.format(img_name, scale) if img_name else 'out_pred_{:.1f}'.format(scale)
+            debugger.add_blend_img(back=img, fore=pred, img_id=blend_img_id)
+            debugger.add_img(img, img_id=out_img_id)
             for k in range(len(dets[i])):
                 if detection[i, k, 4] > self.opt.center_thresh:
                     debugger.add_coco_bbox(detection[i, k, :4],
                                            detection[i, k, -1],
                                            detection[i, k, 4],
-                                           img_id='out_pred_{:.1f}'.format(scale))
+                                           img_id=out_img_id)
+            # add: save all
+            debugger.save_img(imgId=blend_img_id, path=self.opt.debug_dir)
+            debugger.save_img(imgId=out_img_id, path=self.opt.debug_dir)
 
     def show_results(self, debugger, image, results, img_name=None):
-        img_id = 'ctdet' if img_name is None else img_name  # todo: set img_id with img_name
+        img_id = img_name if img_name else 'ctdet'  # todo: set img_id with img_name
         debugger.add_img(image, img_id=img_id)
         # draw results on image
         for j in range(1, self.num_classes + 1):
             for bbox in results[j]:
                 if bbox[4] > self.opt.vis_thresh:
                     debugger.add_coco_bbox(bbox[:4], j - 1, bbox[4], img_id=img_id)
+        # change show to save
         # debugger.show_all_imgs(pause=self.pause)  # not show
         debugger.save_img(imgId=img_id, path=self.opt.debug_dir)

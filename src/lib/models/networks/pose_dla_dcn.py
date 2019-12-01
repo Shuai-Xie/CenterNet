@@ -19,6 +19,7 @@ BN_MOMENTUM = 0.1
 logger = logging.getLogger(__name__)
 
 
+# model pretrain, Deep Layer Aggregation
 def get_model_url(data='imagenet', name='dla34', hash='ba72cf86'):
     return join('http://dl.yf.io/dla/models', data, '{}-{}.pth'.format(name, hash))
 
