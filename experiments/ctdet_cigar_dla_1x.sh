@@ -8,15 +8,27 @@ python main.py ctdet --exp_id cigar_dla_1x --arch dla_34 \
 
 # test
 # --gpus default '0'
+# keep_res will get very low acc!
 python test.py ctdet --exp_id cigar_dla_1x --arch dla_34 \
---dataset cigar --batch_size 1 --keep_res --resume --use best --gpus 0
+--dataset cigar --keep_res --resume --use last --gpus 0
 
 # flip test
-python test.py ctdet --exp_id cigar_resdcn50_test --arch resdcn_50 --keep_res --resume --flip_test --gpus 0
+python test.py ctdet --exp_id cigar_dla_1x --arch dla_34 \
+--dataset cigar --keep_res --resume --flip_test --use last --gpus 0
+
 # multi scale test
-python test.py ctdet --exp_id cigar_resdcn50_test --arch resdcn_50 --keep_res --resume --flip_test --test_scales 0.5,0.75,1,1.25,1.5 --gpus 0
+python test.py ctdet --exp_id cigar_dla_1x --arch dla_34 --keep_res --resume --flip_test --test_scales 0.5,0.75,1,1.25,1.5 --gpus 0
 
 # demo
-python demo.py ctdet --exp_id coco_hg_demo --arch hourglass --keep_res --load_model ../models/ctdet_coco_hg.pth --demo ../images --debug 2 --gpus 0
+python demo.py ctdet --exp_id cigar_dla_1x --arch dla_34 \
+--dataset cigar --load_model ../exp/ctdet/cigar_dla_1x/model_last.pth \
+--demo ../images/cigar --debug 2 --gpus 0 \
+--keep_res
+
+python demo.py ctdet --exp_id cigar_dla_1x --arch dla_34 \
+--dataset cigar --load_model ../exp/ctdet/cigar_dla_1x/model_last.pth \
+--demo ../images/cigar/db534d21-8b6d-4921-86a3-b678632e1cd3___vlcsnap-2019-11-21-18h59m09s722.png \
+--debug 2 --gpus 0
+
 
 cd ..

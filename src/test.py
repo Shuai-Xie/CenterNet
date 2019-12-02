@@ -58,7 +58,6 @@ def prefetch_test(opt):
     opt = opts().update_dataset_info_and_set_heads(opt, Dataset)
     pprint(vars(opt))
 
-    Logger(opt)
     Detector = detector_factory[opt.task]
 
     split = 'val' if not opt.trainval else 'test'  # default False, -> test

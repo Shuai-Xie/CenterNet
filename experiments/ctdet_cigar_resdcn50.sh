@@ -9,6 +9,7 @@ python main.py ctdet --exp_id cigar_resdcn50 --arch resdcn_50 \
 # exp_id has define the dir where we find model_last.pth
 python test.py ctdet --exp_id cigar_resdcn50 --arch resdcn_50 \
 --dataset cigar --keep_res --resume --use best --gpus 0
+
 # flip test
 python test.py ctdet --exp_id cigar_resdcn50 --arch resdcn_50 --keep_res --resume --flip_test --gpus 0
 # multi scale test

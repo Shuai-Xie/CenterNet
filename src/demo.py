@@ -9,6 +9,7 @@ import os
 import cv2
 
 from opts import opts
+from datasets.dataset_factory import dataset_factory
 from detectors.detector_factory import detector_factory
 
 image_ext = ['jpg', 'jpeg', 'png', 'webp']
@@ -20,6 +21,12 @@ def demo(opt):
     os.environ['CUDA_VISIBLE_DEVICES'] = opt.gpus_str
     # even in default o mode, debug = 1
     opt.debug = max(opt.debug, 1)  # 1: only show the final detection results
+
+    # update opt info with dataset
+    Dataset = dataset_factory[opt.dataset]
+    opt = opts().update_dataset_info_and_set_heads(opt, Dataset)
+    pprint(vars(opt))
+
     Detector = detector_factory[opt.task]  # choose a detector
     detector = Detector(opt)
 
@@ -57,25 +64,7 @@ def demo(opt):
             print(time_str)
 
 
-# args example
-ct_det_coco_args = {
-    'resdcn18': [
-        'ctdet',  # detector
-        '--exp_id', 'coco_resdcn18_demo',  # experiment, wrt trained model
-        '--keep_res',  # keep ori img resolution
-        '--load_model', '../models/ctdet_coco_resdcn18.pth',
-        '--gpus', '0',
-        '--arch', 'resdcn_18',  # num_layer = 18
-        '--demo', '../images',  # path to demo images
-        '--debug', '2'
-        # '--cat_spec_wh',  # not use class-aware
-        # '--head_conv', '-1',  # 64, default setting, heat_conv is ok
-        # '--heads' # heads {'hm': 80, 'wh': 2, 'reg': 2}, has set in opts.update_dataset_info_and_set_heads()
-    ]
-}
-
 if __name__ == '__main__':
     # all args define in sh
-    opt = opts().init()
-    pprint(vars(opt))
+    opt = opts().parse()  # parse can use cmd args, init() can't
     demo(opt)  # change debug from 0->1

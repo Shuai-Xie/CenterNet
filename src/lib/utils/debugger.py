@@ -465,12 +465,20 @@ coco_class_name = [
 ]
 
 # 20
-cigar_class_name = [
+cigar_class_name_cn = [
     '大重九_A', '云烟_a', '娇子_B', '中华_B',
     '利群_a', '黄鹤楼_e', '娇子_F', '云烟_A',
     '黄鹤楼_h', '黄鹤楼_E', '黄金叶_C', '555_a',
     '红塔山_b', '玉溪_A', '娇子_K', '黄鹤楼_A',
     '娇子_E', '天子_a', '天子_A', '王冠_A'
+]
+
+cigar_class_name = [
+    'DaZhongJiu_A', 'YunYan_a', 'JiaoZi_B', 'ZhongHua_B',
+    'LiQun_a', 'HuangHeLou_e', 'JiaoZi_F', 'YunYan_A',
+    'HuangHeLou_h', 'HuangHeLou_E', 'HuangJinYe_C', '555_a',
+    'HongTaShan_b', 'YuXi_A', 'JiaoZi_K', 'HuangHeLou_A',
+    'JiaoZi_E', 'TianZi_a', 'TianZi_A', 'WangGuan_A'
 ]
 
 color_list = np.array(
