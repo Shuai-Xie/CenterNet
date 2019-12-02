@@ -121,6 +121,8 @@ class opts(object):
         self.parser.add_argument('--keep_res', action='store_true',
                                  help='keep the original resolution'
                                       ' during validation.')
+        self.parser.add_argument('--use', type=str, default='last',
+                                 help='[last|best] used model to test.')
 
         # dataset
         self.parser.add_argument('--not_rand_crop', action='store_true',
@@ -291,9 +293,11 @@ class opts(object):
 
         print('The output will be saved to ', opt.save_dir)
 
+        # todo: --resume will set --load_model as last/best
         if opt.resume and opt.load_model == '':
             model_path = opt.save_dir[:-4] if opt.save_dir.endswith('TEST') else opt.save_dir
-            opt.load_model = os.path.join(model_path, 'model_last.pth')
+            opt.load_model = os.path.join(model_path, 'model_{}.pth'.format(opt.use))
+
         return opt
 
     def update_dataset_info_and_set_heads(self, opt, dataset):

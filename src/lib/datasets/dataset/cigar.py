@@ -113,12 +113,13 @@ class Cigar(data.Dataset):
                   open('{}/results.json'.format(save_dir), 'w'))
 
     def run_eval(self, results, save_dir):
-        # result_json = os.path.join(save_dir, "results.json")
-        # detections  = self.convert_eval_format(results)
-        # json.dump(detections, open(result_json, "w"))
+        # save det results to local, then load
         self.save_results(results, save_dir)
         coco_dets = self.coco.loadRes('{}/results.json'.format(save_dir))
-        coco_eval = COCOeval(self.coco, coco_dets, "bbox")
-        coco_eval.evaluate()
-        coco_eval.accumulate()
-        coco_eval.summarize()
+        coco_eval = COCOeval(cocoGt=self.coco,
+                             cocoDt=coco_dets,
+                             iouType="bbox")  # initialize CocoEval object
+
+        coco_eval.evaluate()  # run per image evaluation
+        coco_eval.accumulate()  # accumulate per image results
+        coco_eval.summarize()  # display summary metrics of results

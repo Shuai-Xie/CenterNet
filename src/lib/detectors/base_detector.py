@@ -109,8 +109,9 @@ class BaseDetector(object):
         elif isinstance(image_or_path_or_tensor, str):  # img name
             image = cv2.imread(image_or_path_or_tensor)
             img_name = os.path.basename(image_or_path_or_tensor)
-        else:
-            image = image_or_path_or_tensor['image'][0].numpy()  # ?
+        else:  # pre_processed_images
+            image = image_or_path_or_tensor['image'][0].numpy()  # prefetch_test, PrefetchDataset
+            # print(image.shape)  # (1080, 1920, 3), ori img size
             pre_processed_images = image_or_path_or_tensor
             pre_processed = True
 
@@ -118,7 +119,7 @@ class BaseDetector(object):
         load_time += (loaded_time - start_time)
 
         detections = []
-        for scale in self.scales:
+        for scale in self.scales:  # default [1.0]
             scale_start_time = time.time()
 
             # pre_process input images
@@ -133,6 +134,7 @@ class BaseDetector(object):
                 }
 
             images = images.to(self.opt.device)  # tensor to device
+
             torch.cuda.synchronize()  # sync and cal time
             pre_process_time = time.time()
             pre_time += pre_process_time - scale_start_time
@@ -167,7 +169,6 @@ class BaseDetector(object):
         if self.opt.debug >= 1:
             # pass one more param: img_name, to save img
             self.show_results(debugger, image, results, img_name)
-        exit(0)
 
         return {
             'results': results,

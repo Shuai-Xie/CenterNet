@@ -24,6 +24,8 @@ class Debugger(object):
             self.colors = self.colors.reshape(-1)[::-1].reshape(len(colors), 1, 1, 3)
             self.colors = np.clip(self.colors, 0., 0.6 * 255).astype(np.uint8)
         self.dim_scale = 1
+
+        # todo: add your class defination
         if dataset == 'coco_hp':
             self.names = ['p']
             self.num_class = 1
@@ -47,6 +49,8 @@ class Debugger(object):
             self.names = coco_class_name
         elif num_classes == 20 or dataset == 'pascal':
             self.names = pascal_class_name
+        elif dataset == 'cigar':  # todo: add your dataset class_name in the end of this py
+            self.names = cigar_class_name
         elif dataset == 'gta':
             self.names = gta_class_name
             self.focal_length = 935.3074360871937
@@ -438,9 +442,11 @@ gta_class_name = [
     'p', 'v'
 ]
 
-pascal_class_name = ["aeroplane", "bicycle", "bird", "boat", "bottle", "bus",
-                     "car", "cat", "chair", "cow", "diningtable", "dog", "horse", "motorbike",
-                     "person", "pottedplant", "sheep", "sofa", "train", "tvmonitor"]
+pascal_class_name = [
+    "aeroplane", "bicycle", "bird", "boat", "bottle", "bus",
+    "car", "cat", "chair", "cow", "diningtable", "dog", "horse", "motorbike",
+    "person", "pottedplant", "sheep", "sofa", "train", "tvmonitor"
+]
 
 coco_class_name = [
     'person', 'bicycle', 'car', 'motorcycle', 'airplane',
@@ -456,6 +462,15 @@ coco_class_name = [
     'laptop', 'mouse', 'remote', 'keyboard', 'cell phone', 'microwave',
     'oven', 'toaster', 'sink', 'refrigerator', 'book', 'clock', 'vase',
     'scissors', 'teddy bear', 'hair drier', 'toothbrush'
+]
+
+# 20
+cigar_class_name = [
+    '大重九_A', '云烟_a', '娇子_B', '中华_B',
+    '利群_a', '黄鹤楼_e', '娇子_F', '云烟_A',
+    '黄鹤楼_h', '黄鹤楼_E', '黄金叶_C', '555_a',
+    '红塔山_b', '玉溪_A', '娇子_K', '黄鹤楼_A',
+    '娇子_E', '天子_a', '天子_A', '王冠_A'
 ]
 
 color_list = np.array(

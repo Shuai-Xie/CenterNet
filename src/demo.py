@@ -3,6 +3,7 @@ from __future__ import division
 from __future__ import print_function
 
 import _init_paths
+from pprint import pprint
 
 import os
 import cv2
@@ -56,10 +57,9 @@ def demo(opt):
             print(time_str)
 
 
-from pprint import pprint
-
-if __name__ == '__main__':
-    resdcn18_args = [
+# args example
+ct_det_coco_args = {
+    'resdcn18': [
         'ctdet',  # detector
         '--exp_id', 'coco_resdcn18_demo',  # experiment, wrt trained model
         '--keep_res',  # keep ori img resolution
@@ -72,26 +72,10 @@ if __name__ == '__main__':
         # '--head_conv', '-1',  # 64, default setting, heat_conv is ok
         # '--heads' # heads {'hm': 80, 'wh': 2, 'reg': 2}, has set in opts.update_dataset_info_and_set_heads()
     ]
-    dla34_args = [
-        'ctdet',  # detector
-        '--exp_id', 'coco_dla_2x_demo',
-        '--keep_res',  # keep ori img resolution
-        '--load_model', '../models/ctdet_coco_dla_2x.pth',
-        '--gpus', '0',
-        '--arch', 'dla_34',
-        '--demo', '../images',
-        '--debug', '2'
-    ]
-    hg_args = [
-        'ctdet',  # detector
-        '--exp_id', 'coco_hg_demo',
-        '--keep_res',  # keep ori img resolution
-        '--load_model', '../models/ctdet_coco_hg.pth',
-        '--gpus', '0',
-        '--arch', 'hourglass',
-        '--demo', '../images',
-        '--debug', '2'
-    ]
-    opt = opts().init(resdcn18_args)
+}
+
+if __name__ == '__main__':
+    # all args define in sh
+    opt = opts().init()
     pprint(vars(opt))
     demo(opt)  # change debug from 0->1

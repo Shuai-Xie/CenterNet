@@ -59,7 +59,7 @@ def load_model(model, model_path,
                lr=None, lr_step=None):
     # 1.load ckpt
     checkpoint = torch.load(model_path, map_location=lambda storage, loc: storage)
-    print('loaded {}, epoch {}'.format(model_path, checkpoint['epoch']))  # resdcn18, epoch=140, 1x; 2x, epoch=230
+    print('loaded {}, epoch {}'.format(model_path, checkpoint['epoch']))
 
     # 2.judge model and ckpt state_dict, so that ckpt can be loaded
 
@@ -104,6 +104,7 @@ def load_model(model, model_path,
 
     # load ckpt done!
     model.load_state_dict(state_dict, strict=False)
+    print('load ckpt done!')
 
     # 3.resume optimizer parameters
     if optimizer is not None and resume:

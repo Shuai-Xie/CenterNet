@@ -3,6 +3,7 @@ from __future__ import division
 from __future__ import print_function
 
 import _init_paths
+from pprint import pprint
 
 import os
 import json
@@ -33,14 +34,18 @@ class PrefetchDataset(torch.utils.data.Dataset):
         img_info = self.load_image_func(ids=[img_id])[0]
         img_path = os.path.join(self.img_dir, img_info['file_name'])
         image = cv2.imread(img_path)
-        images, meta = {}, {}
+        images, meta = {}, {}  # scales img and meta trans
+        # scales img
         for scale in opt.test_scales:
             if opt.task == 'ddd':
-                images[scale], meta[scale] = self.pre_process_func(
-                    image, scale, img_info['calib'])
+                images[scale], meta[scale] = self.pre_process_func(image, scale, img_info['calib'])
             else:
                 images[scale], meta[scale] = self.pre_process_func(image, scale)
-        return img_id, {'images': images, 'image': image, 'meta': meta}
+        return img_id, {
+            'images': images,  # scaled imgs
+            'image': image,  # np img
+            'meta': meta  # affine trans
+        }
 
     def __len__(self):
         return len(self.images)
@@ -51,23 +56,32 @@ def prefetch_test(opt):
 
     Dataset = dataset_factory[opt.dataset]
     opt = opts().update_dataset_info_and_set_heads(opt, Dataset)
-    print(opt)
+    pprint(vars(opt))
+
     Logger(opt)
     Detector = detector_factory[opt.task]
 
-    split = 'val' if not opt.trainval else 'test'
+    split = 'val' if not opt.trainval else 'test'  # default False, -> test
+    split = 'train'
     dataset = Dataset(opt, split)
     detector = Detector(opt)
 
+    # preprocess dataset
     data_loader = torch.utils.data.DataLoader(
         PrefetchDataset(opt, dataset, detector.pre_process),
-        batch_size=1, shuffle=False, num_workers=1, pin_memory=True)
+        batch_size=1,
+        shuffle=False,
+        num_workers=1,
+        pin_memory=True
+    )
 
     results = {}
-    num_iters = len(dataset)
+    num_iters = len(dataset)  # 51
+
     bar = Bar('{}'.format(opt.exp_id), max=num_iters)
     time_stats = ['tot', 'load', 'pre', 'net', 'dec', 'post', 'merge']
     avg_time_stats = {t: AverageMeter() for t in time_stats}
+
     for ind, (img_id, pre_processed_images) in enumerate(data_loader):
         ret = detector.run(pre_processed_images)
         results[img_id.numpy().astype(np.int32)[0]] = ret['results']
@@ -79,6 +93,7 @@ def prefetch_test(opt):
                 t, tm=avg_time_stats[t])
         bar.next()
     bar.finish()
+    # run eval!
     dataset.run_eval(results, opt.save_dir)
 
 
@@ -87,19 +102,21 @@ def test(opt):
 
     Dataset = dataset_factory[opt.dataset]
     opt = opts().update_dataset_info_and_set_heads(opt, Dataset)
-    print(opt)
+    pprint(opt)
+
     Logger(opt)
     Detector = detector_factory[opt.task]
+    detector = Detector(opt)
 
     split = 'val' if not opt.trainval else 'test'
     dataset = Dataset(opt, split)
-    detector = Detector(opt)
 
     results = {}
     num_iters = len(dataset)
     bar = Bar('{}'.format(opt.exp_id), max=num_iters)
     time_stats = ['tot', 'load', 'pre', 'net', 'dec', 'post', 'merge']
     avg_time_stats = {t: AverageMeter() for t in time_stats}
+
     for ind in range(num_iters):
         img_id = dataset.images[ind]
         img_info = dataset.coco.loadImgs(ids=[img_id])[0]
@@ -123,14 +140,8 @@ def test(opt):
 
 
 if __name__ == '__main__':
-    args = [
-        'ctdet',  # detector
-        '--exp_id', 'coco_dla',  # experiment, wrt trained model
-        '--keep_res',  # keep ori img resolution
-        '--load_model', '../models/ctdet_coco_dla_2x.pth',
-        '--gpus', '0'
-    ]
-    opt = opts().parse(args)
+    opt = opts().parse()
+    # default False, so use prefetch_test!
     if opt.not_prefetch_test:  # not use parallal data pre-processing
         test(opt)
     else:

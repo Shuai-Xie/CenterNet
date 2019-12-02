@@ -110,53 +110,5 @@ def main(opt):
 
 
 if __name__ == '__main__':
-    resdcn18_args = [
-        'ctdet',
-        '--exp_id', 'cigar_resdcn50',
-        '--arch', 'resdcn_50',
-        '--dataset', 'cigar',
-        '--batch_size', '16',
-        '--lr', '1e-4',
-        '--num_epochs', '70',
-        '--lr_step', '45, 60',
-        # '--input_h', '360',  # screen shot size
-        # '--input_w', '640',
-        '--gpus', '0',
-        '--num_workers', '2',  # if set 4, exceeds!
-        '--save_all',
-    ]
-    dla34_args = [
-        'ctdet',
-        '--exp_id', 'cigar_dla_1x',
-        '--arch', 'dla_34',
-        '--dataset', 'cigar',  # must set dataset here! default is coco
-        '--batch_size', '16',
-        # '--master_batch_size', '16',  # batch size on the master gpu
-        '--lr', '1e-4',
-        '--num_epochs', '70',  # load pretrain, but still start from 1!
-        '--lr_step', '45, 60',
-        # '--input_h', '360',  # screen shot size
-        # '--input_w', '640',
-        '--gpus', '0',
-        '--num_workers', '2',
-        '--save_all',  # save model to disk every 5 epochs
-        '--load_model', '../exp/ctdet/cigar_dla_1x/model_last.pth'  # 25
-    ]
-    hg_args = [
-        'ctdet',
-        '--exp_id', 'cigar_dla_1x',
-        '--arch', 'dla_34',
-        '--dataset', 'cigar',  # must set dataset here! default is coco
-        '--batch_size', '16',
-        # '--master_batch_size', '16',  # batch size on the master gpu
-        '--lr', '1e-4',
-        '--num_epochs', '70',
-        '--lr_step', '45, 60',
-        # '--input_h', '360',  # screen shot size
-        # '--input_w', '640',
-        '--gpus', '0',
-        '--num_workers', '2',
-        '--save_all',  # save model to disk every 5 epochs
-    ]
-    opt = opts().parse(dla34_args)
+    opt = opts().parse()
     main(opt)
