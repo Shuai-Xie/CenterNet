@@ -29,16 +29,31 @@ class CtdetDetector(BaseDetector):
         super(CtdetDetector, self).__init__(opt)
 
     def process(self, images, return_time=False):
+        """
+        :param images: images tensor
+        :param return_time: whether return forward time
+        :return: if flip_test, dim0 = 2
+            outputs = {
+                'hm': [1, 20, 128, 128] (B, C, out_h, out_w)
+                'wh': [1, 2, 128, 128]
+                'reg': [1, 2, 128, 128]
+            }
+        """
         with torch.no_grad():
             # forward, define in lib.models.networks
             output = self.model(images)[-1]  # forward return [ret]
-            hm = output['hm'].sigmoid_()  # todo ?
+            # print(type(output))  # dict
+            # for k, v in output.items():
+            #     print(k, v.size())
+            hm = output['hm'].sigmoid_()  # in-place sigmoid, activation fn
             wh = output['wh']
             reg = output['reg'] if self.opt.reg_offset else None  # center offset
-            if self.opt.flip_test:
-                hm = (hm[0:1] + flip_tensor(hm[1:2])) / 2
+
+            if self.opt.flip_test:  # get mean
+                hm = (hm[0:1] + flip_tensor(hm[1:2])) / 2  # dim0=2
                 wh = (wh[0:1] + flip_tensor(wh[1:2])) / 2
-                reg = reg[0:1] if reg is not None else None
+                reg = reg[0:1] if reg is not None else None  # not like wh
+
             torch.cuda.synchronize()
             forward_time = time.time()
             dets = ctdet_decode(hm, wh, reg=reg, cat_spec_wh=self.opt.cat_spec_wh, K=self.opt.K)

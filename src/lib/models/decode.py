@@ -9,12 +9,16 @@ from .utils import _gather_feat, _tranpose_and_gather_feat
 
 def _nms(heat, kernel=3):
     """
-    heatmap, nms get max, like openpose get peaks
+    :param heat: sigmoid(hm)
+    :param kernel: 3x3, stride 1, same conv
+    :return: heat only with peaks, others set 0
     """
-    pad = (kernel - 1) // 2
-    hmax = nn.functional.max_pool2d(heat, (kernel, kernel), stride=1, padding=pad)
+    pad = (kernel - 1) // 2  # make output = input size
+    hmax = nn.functional.max_pool2d(heat,
+                                    (kernel, kernel),
+                                    stride=1, padding=pad)  # stride=1, more precise
     keep = (hmax == heat).float()
-    return heat * keep
+    return heat * keep  # keep peaks, others set 0
 
 
 def _left_aggregate(heat):
@@ -113,21 +117,38 @@ def _topk_channel(scores, K=40):
 
 
 def _topk(scores, K=40):
+    """
+    inference stage
+    :param scores: nms(sigmoid(hm))
+    :param K:
+    :return:
+    """
     batch, cat, height, width = scores.size()
 
-    # todo: top k
-    topk_scores, topk_inds = torch.topk(scores.view(batch, cat, -1), K)  # last dim flatten fm, h*w
+    # topk 1: get K objects of each cat, rational, as max_num of each cat is K
+    # flat h*w, cus topk fn cal last dim
+    topk_scores, topk_inds = torch.topk(scores.view(batch, cat, -1), K)  # default dim=-1
+    # topk_scores: [B,C,K]
+    # topk_inds: [B,C,K] val~(0, h*w)
 
     # get top (x,y) from top inds
     topk_inds = topk_inds % (height * width)
     topk_ys = (topk_inds / width).int().float()
     topk_xs = (topk_inds % width).int().float()
 
-    topk_score, topk_ind = torch.topk(topk_scores.view(batch, -1), K)
-    topk_clses = (topk_ind / K).int()
-    topk_inds = _gather_feat(
-        topk_inds.view(batch, -1, 1), topk_ind).view(batch, K)
+    # topk 2: get K objects of total cat
+    topk_score, topk_ind = torch.topk(topk_scores.view(batch, -1), K)  # flat C*K
+    # topk_score: [B,K]
+    # topk_ind: [B,K]
 
+    # get the cls of topk objs belong to, may repeat
+    topk_clses = (topk_ind / K).int()  # /K as last dim=K, topk_ind ~(0, C*K)
+
+    # recover ind to inds, cus topk_ind has lost the ind in ori hm
+    # match topk_ind to topk_inds
+    # topk_inds has topk ind in each cat hm
+    # topk_ind has topk ind in all cat hm
+    topk_inds = _gather_feat(topk_inds.view(batch, -1, 1), topk_ind).view(batch, K)  # [B,K]
     topk_ys = _gather_feat(topk_ys.view(batch, -1, 1), topk_ind).view(batch, K)
     topk_xs = _gather_feat(topk_xs.view(batch, -1, 1), topk_ind).view(batch, K)
 
@@ -475,15 +496,29 @@ def ddd_decode(heat, rot, depth, dim, wh=None, reg=None, K=40):
     return detections
 
 
+from utils.my_utils import plt_heatmaps, cat_conf_point_stats
+
+
 def ctdet_decode(heat, wh, reg=None, cat_spec_wh=False, K=100):
+    """
+    decode top K box from [hm, wh, reg]
+    :param heat: heatmap [B,C,H,W]
+    :param wh: [B,2,H,W]
+    :param reg: [B,2,H,W] or None
+    :param cat_spec_wh:
+    :param K: topk
+    :return: detections [B,K,6]
+    """
     batch, cat, height, width = heat.size()  # cat = num_classes
 
-    # heat = torch.sigmoid(heat)  # done in: hm = output['hm'].sigmoid_()
     # perform nms on heatmaps
     heat = _nms(heat)
 
+    # plt_heatmaps(heat)
+
     scores, inds, clses, ys, xs = _topk(heat, K=K)
 
+    # xy center
     if reg is not None:
         reg = _tranpose_and_gather_feat(reg, inds)
         reg = reg.view(batch, K, 2)
@@ -492,6 +527,8 @@ def ctdet_decode(heat, wh, reg=None, cat_spec_wh=False, K=100):
     else:
         xs = xs.view(batch, K, 1) + 0.5
         ys = ys.view(batch, K, 1) + 0.5
+
+    # wh
     wh = _tranpose_and_gather_feat(wh, inds)
     if cat_spec_wh:
         wh = wh.view(batch, K, cat, 2)
@@ -499,13 +536,14 @@ def ctdet_decode(heat, wh, reg=None, cat_spec_wh=False, K=100):
         wh = wh.gather(2, clses_ind).view(batch, K, 2)
     else:
         wh = wh.view(batch, K, 2)
+
     clses = clses.view(batch, K, 1).float()
     scores = scores.view(batch, K, 1)
-    bboxes = torch.cat([xs - wh[..., 0:1] / 2,
+    bboxes = torch.cat([xs - wh[..., 0:1] / 2,  # [B,K,1]
                         ys - wh[..., 1:2] / 2,
                         xs + wh[..., 0:1] / 2,
-                        ys + wh[..., 1:2] / 2], dim=2)
-    detections = torch.cat([bboxes, scores, clses], dim=2)
+                        ys + wh[..., 1:2] / 2], dim=2)  # [B,K,4]
+    detections = torch.cat([bboxes, scores, clses], dim=2)  # [B,K,6]
 
     return detections
 

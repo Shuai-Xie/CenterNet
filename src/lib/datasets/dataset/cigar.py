@@ -43,7 +43,7 @@ class Cigar(data.Dataset):
         # self.max_objs = 128
         self.class_name = [
             '__background__',
-            'DaZhongJiu_A', 'YunYan_a', 'JiaoZi_B', 'ZhongHua_B',
+            'DaChongJiu_A', 'YunYan_a', 'JiaoZi_B', 'ZhongHua_B',
             'LiQun_a', 'HuangHeLou_e', 'JiaoZi_F', 'YunYan_A',
             'HuangHeLou_h', 'HuangHeLou_E', 'HuangJinYe_C', '555_a',
             'HongTaShan_b', 'YuXi_A', 'JiaoZi_K', 'HuangHeLou_A',
