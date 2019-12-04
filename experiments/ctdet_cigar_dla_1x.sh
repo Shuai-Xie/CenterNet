@@ -27,7 +27,7 @@ python demo.py ctdet --exp_id cigar_dla_1x --arch dla_34 \
 
 python demo.py ctdet --exp_id cigar_dla_1x --arch dla_34 \
 --dataset cigar --load_model ../exp/ctdet/cigar_dla_1x/model_last.pth \
---demo ../images/cigar/db534d21-8b6d-4921-86a3-b678632e1cd3___vlcsnap-2019-11-21-18h59m09s722.png \
+--demo ../images/cigar/6ce746ea-72a1-4b2a-9f10-7b249e856838___2019-09-19_191844_cloud_video_1907.jpg \
 --debug 2 --gpus 0
 
 

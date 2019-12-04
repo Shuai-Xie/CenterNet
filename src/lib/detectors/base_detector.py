@@ -124,7 +124,8 @@ class BaseDetector(object):
 
             # pre_process input images
             if not pre_processed:
-                images, meta = self.pre_process(image, scale, meta)  # totensor, affine meta params
+                # totensor, affine meta params
+                images, meta = self.pre_process(image, scale, meta)
             else:
                 # import pdb; pdb.set_trace()
                 images = pre_processed_images['images'][scale][0]
@@ -140,6 +141,7 @@ class BaseDetector(object):
             pre_time += pre_process_time - scale_start_time
 
             # model forward
+            #
             output, dets, forward_time = self.process(images, return_time=True)
 
             torch.cuda.synchronize()
