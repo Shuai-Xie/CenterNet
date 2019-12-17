@@ -60,7 +60,9 @@ class COCO(data.Dataset):
             58, 59, 60, 61, 62, 63, 64, 65, 67, 70,
             72, 73, 74, 75, 76, 77, 78, 79, 80, 81,
             82, 84, 85, 86, 87, 88, 89, 90]
-        self.cat_ids = {v: i for i, v in enumerate(self._valid_ids)}
+        self.cat_ids = {
+            v: i for i, v in enumerate(self._valid_ids)
+        }
         self.voc_color = [(v // 32 * 64 + 64, (v // 8) % 4 * 64, v % 8 * 32) \
                           for v in range(1, self.num_classes + 1)]
         self._data_rng = np.random.RandomState(123)

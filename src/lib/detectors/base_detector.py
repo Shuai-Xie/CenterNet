@@ -37,20 +37,23 @@ class BaseDetector(object):
 
     def pre_process(self, image, scale, meta=None):
         """
-        :param image: ndarray img
+        :param image: ori ndarray img
         :param scale: scale
         :param meta:
         :returns
             images: tensor, maybe with filp image
             meta: {'c', 's', 'out_height', 'out_width'} to recover img to ori
         """
-        height, width = image.shape[:2]
-        new_height = int(height * scale)
+        height, width = image.shape[:2]  # ori img size
+        new_height = int(height * scale)  # scale=1
         new_width = int(width * scale)
-        if self.opt.fix_res:
+
+        # [inp_height, inp_width] is the key!
+        if self.opt.fix_res:  # True, fix to model input_size
             inp_height, inp_width = self.opt.input_h, self.opt.input_w
             c = np.array([new_width / 2., new_height / 2.], dtype=np.float32)  # affine_transform center
-            s = max(height, width) * 1.0
+            # s = max(height, width) * 1.0
+            s = np.array([new_width, new_height], dtype=np.float32)
         else:
             # opt.pad = 127 if 'hourglass' in opt.arch else 31
             inp_height = (new_height | self.opt.pad) + 1
@@ -58,20 +61,28 @@ class BaseDetector(object):
             c = np.array([new_width // 2, new_height // 2], dtype=np.float32)  # affine_transform center
             s = np.array([inp_width, inp_height], dtype=np.float32)
 
-        trans_input = get_affine_transform(c, s, 0, [inp_width, inp_height])
+        # trans to input_resize img, center is center after scale
+        trans_input = get_affine_transform(center=c, scale=s,
+                                           rot=0, output_size=[inp_width, inp_height])
+        # resize ori img by scale
         resized_image = cv2.resize(image, (new_width, new_height))  # by scale
-        inp_image = cv2.warpAffine(
-            resized_image, trans_input, (inp_width, inp_height),
-            flags=cv2.INTER_LINEAR)
-        inp_image = ((inp_image / 255. - self.mean) / self.std).astype(np.float32)
+        # trans to input size
+        inp_image = cv2.warpAffine(resized_image, trans_input,
+                                   (inp_width, inp_height),
+                                   flags=cv2.INTER_LINEAR)
 
+        # normalize
+        inp_image = ((inp_image / 255. - self.mean) / self.std).astype(np.float32)
+        # reshape to tensor
         images = inp_image.transpose(2, 0, 1).reshape(1, 3, inp_height, inp_width)  # tensor shape
+
         if self.opt.flip_test:
             images = np.concatenate((images, images[:, :, :, ::-1]), axis=0)
+
         images = torch.from_numpy(images)
         meta = {
-            'c': c,
-            's': s,
+            'c': c,  # center of img*scale, not the model input_size
+            's': s,  # max side of img
             'out_height': inp_height // self.opt.down_ratio,
             'out_width': inp_width // self.opt.down_ratio
         }
@@ -104,12 +115,12 @@ class BaseDetector(object):
         start_time = time.time()
         pre_processed = False
         img_name = None
-        if isinstance(image_or_path_or_tensor, np.ndarray):
+        if isinstance(image_or_path_or_tensor, np.ndarray):  # cv read
             image = image_or_path_or_tensor
         elif isinstance(image_or_path_or_tensor, str):  # img name
             image = cv2.imread(image_or_path_or_tensor)
             img_name = os.path.basename(image_or_path_or_tensor)
-        else:  # pre_processed_images
+        else:  # pre_processed_images = {}
             image = image_or_path_or_tensor['image'][0].numpy()  # prefetch_test, PrefetchDataset
             # print(image.shape)  # (1080, 1920, 3), ori img size
             pre_processed_images = image_or_path_or_tensor
@@ -123,16 +134,16 @@ class BaseDetector(object):
             scale_start_time = time.time()
 
             # pre_process input images
+            # images: may flip test
+            # meta: recover res to ori size
             if not pre_processed:
                 # totensor, affine meta params
                 images, meta = self.pre_process(image, scale, meta)
             else:
                 # import pdb; pdb.set_trace()
-                images = pre_processed_images['images'][scale][0]
+                images = pre_processed_images['images'][scale][0]  # [1, 3, 352, 640]
                 meta = pre_processed_images['meta'][scale]
-                meta = {
-                    k: v.numpy()[0] for k, v in meta.items()
-                }
+                meta = {k: v.numpy()[0] for k, v in meta.items()}
 
             images = images.to(self.opt.device)  # tensor to device
 
@@ -140,8 +151,7 @@ class BaseDetector(object):
             pre_process_time = time.time()
             pre_time += pre_process_time - scale_start_time
 
-            # model forward
-            #
+            # model forward, 1/4 results
             output, dets, forward_time = self.process(images, return_time=True)  # return forward time
 
             torch.cuda.synchronize()
@@ -150,7 +160,7 @@ class BaseDetector(object):
             dec_time += decode_time - forward_time
 
             if self.opt.debug >= 2:
-                # debug img, add pred_blend_img
+                # debug img, add pred_blend_img, x4
                 self.debug(debugger, images, dets, output, scale, img_name)
 
             # affine transform

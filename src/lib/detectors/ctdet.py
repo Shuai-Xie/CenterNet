@@ -33,11 +33,12 @@ class CtdetDetector(BaseDetector):
         :param images: images tensor
         :param return_time: whether return forward time
         :return: if flip_test, dim0 = 2
-            outputs = {
-                'hm': [1, 20, 128, 128] (B, C, out_h, out_w)
-                'wh': [1, 2, 128, 128]
-                'reg': [1, 2, 128, 128]
+            output = {
+                'hm': [1, 20, 88, 160] (B, C, out_h, out_w)
+                'wh': [1, 2, 88, 160]
+                'reg': [1, 2, 88, 160]
             }
+            dets: [B,K,6]
         """
         with torch.no_grad():
             # forward, define in lib.models.networks
@@ -56,7 +57,9 @@ class CtdetDetector(BaseDetector):
 
             torch.cuda.synchronize()
             forward_time = time.time()
+            # [B,K,6] box,score,cls
             dets = ctdet_decode(hm, wh, reg=reg, cat_spec_wh=self.opt.cat_spec_wh, K=self.opt.K)
+            # print(dets)
 
         if return_time:
             return output, dets, forward_time
@@ -67,8 +70,8 @@ class CtdetDetector(BaseDetector):
         """
         recover result to ori img size with meta
         """
-        dets = dets.detach().cpu().numpy()
-        dets = dets.reshape(1, -1, dets.shape[2])
+        dets = dets.detach().cpu().numpy()  # [B,K,6] box,score,cls
+        dets = dets.reshape(1, -1, dets.shape[2])  # [1,B*K,6]
         dets = ctdet_post_process(  # affine transform
             dets.copy(), [meta['c']], [meta['s']],
             meta['out_height'], meta['out_width'], self.opt.num_classes)
@@ -100,17 +103,19 @@ class CtdetDetector(BaseDetector):
 
     def debug(self, debugger, images, dets, output, scale=1, img_name=None):
         detection = dets.detach().cpu().numpy().copy()
-        detection[:, :, :4] *= self.opt.down_ratio  # scale to 4x, but not to ori img size
+        # scale to 4x [input_size], but not to ori img size
+        detection[:, :, :4] *= self.opt.down_ratio
         for i in range(1):
             img = images[i].detach().cpu().numpy().transpose(1, 2, 0)  # h,w,3
             img = ((img * self.std + self.mean) * 255).astype(np.uint8)  # recover to 255 img
             pred = debugger.gen_colormap(output['hm'][i].detach().cpu().numpy())
             blend_img_id = '{}_pred_hm_{:.1f}'.format(img_name, scale) if img_name else 'pred_hm_{:.1f}'.format(scale)
             out_img_id = '{}_out_pred_{:.1f}'.format(img_name, scale) if img_name else 'out_pred_{:.1f}'.format(scale)
+            # add: blend_img, out_img
             debugger.add_blend_img(back=img, fore=pred, img_id=blend_img_id)
             debugger.add_img(img, img_id=out_img_id)
-            for k in range(len(dets[i])):  # i:img, k:box
-                if detection[i, k, 4] > self.opt.center_thresh:
+            for k in range(len(dets[i])):  # i:img, k:box, 4 score
+                if detection[i, k, 4] > self.opt.center_thresh:  # center_thresh=0.1
                     debugger.add_coco_bbox(bbox=detection[i, k, :4],
                                            cat=detection[i, k, -1],
                                            conf=detection[i, k, 4],

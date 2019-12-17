@@ -25,8 +25,9 @@ def get_model_url(data='imagenet', name='dla34', hash='ba72cf86'):
 
 
 def conv3x3(in_planes, out_planes, stride=1):
-    "3x3 convolution with padding"
-    return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride,
+    """ 3x3 convolution with padding """
+    return nn.Conv2d(in_planes, out_planes,
+                     kernel_size=3, stride=stride,
                      padding=1, bias=False)
 
 
@@ -168,14 +169,17 @@ class Root(nn.Module):
 
 
 class Tree(nn.Module):
-    def __init__(self, levels, block, in_channels, out_channels, stride=1,
-                 level_root=False, root_dim=0, root_kernel_size=1,
+    def __init__(self, levels, block, in_channels, out_channels,
+                 stride=1,
+                 level_root=False,
+                 root_dim=0, root_kernel_size=1,
                  dilation=1, root_residual=False):
         super(Tree, self).__init__()
         if root_dim == 0:
             root_dim = 2 * out_channels
         if level_root:
             root_dim += in_channels
+
         if levels == 1:
             self.tree1 = block(in_channels, out_channels, stride,
                                dilation=dilation)
@@ -190,6 +194,7 @@ class Tree(nn.Module):
                               root_dim=root_dim + out_channels,
                               root_kernel_size=root_kernel_size,
                               dilation=dilation, root_residual=root_residual)
+
         if levels == 1:
             self.root = Root(root_dim, out_channels, root_kernel_size,
                              root_residual)
@@ -226,26 +231,46 @@ class Tree(nn.Module):
 class DLA(nn.Module):
     def __init__(self, levels, channels, num_classes=1000,
                  block=BasicBlock, residual_root=False, linear_root=False):
+        """
+        Deep Layer Aggregation, dla34 eg
+        :param levels:   [1,  1,  1,  2,   2,   1], like resnet blocks
+        :param channels: [16, 32, 64, 128, 256, 512]
+        :param num_classes:
+        :param block: BasicBlock, Bottleneck, BottleneckX
+        :param residual_root:
+        :param linear_root:
+        """
         super(DLA, self).__init__()
         self.channels = channels
         self.num_classes = num_classes
-        self.base_layer = nn.Sequential(
-            nn.Conv2d(3, channels[0], kernel_size=7, stride=1,
-                      padding=3, bias=False),
+
+        # base layer
+        self.base_layer = nn.Sequential(  # CBR, s=1,
+            nn.Conv2d(3, channels[0],  # 16, not as resnet, out_c=64
+                      kernel_size=7, stride=1,  # not as resnet, s=2
+                      padding=3, bias=False),  # s=1, k=2p+1, size no change
             nn.BatchNorm2d(channels[0], momentum=BN_MOMENTUM),
-            nn.ReLU(inplace=True))
+            nn.ReLU(inplace=True)
+        )
+
+        # levels, (in,out,convs[layer num])
         self.level0 = self._make_conv_level(
-            channels[0], channels[0], levels[0])
+            channels[0], channels[0], levels[0])  # 16,h,w
         self.level1 = self._make_conv_level(
-            channels[0], channels[1], levels[1], stride=2)
-        self.level2 = Tree(levels[2], block, channels[1], channels[2], 2,
-                           level_root=False,
-                           root_residual=residual_root)
-        self.level3 = Tree(levels[3], block, channels[2], channels[3], 2,
+            channels[0], channels[1], levels[1], stride=2)  # 16, 1/2
+
+        # from 1/4, begin layer aggregation
+        self.level2 = Tree(levels[2], block, channels[1], channels[2],
+                           stride=2,  # 64, 1/4
+                           level_root=False, root_residual=residual_root)
+        self.level3 = Tree(levels[3], block, channels[2], channels[3],
+                           stride=2,  # 128, 1/8
                            level_root=True, root_residual=residual_root)
-        self.level4 = Tree(levels[4], block, channels[3], channels[4], 2,
+        self.level4 = Tree(levels[4], block, channels[3], channels[4],
+                           stride=2,  # 256, 1/16
                            level_root=True, root_residual=residual_root)
-        self.level5 = Tree(levels[5], block, channels[4], channels[5], 2,
+        self.level5 = Tree(levels[5], block, channels[4], channels[5],
+                           stride=2,  # 512, 1/32
                            level_root=True, root_residual=residual_root)
 
         # for m in self.modules():
@@ -276,26 +301,30 @@ class DLA(nn.Module):
     def _make_conv_level(self, inplanes, planes, convs, stride=1, dilation=1):
         modules = []
         for i in range(convs):
+            # direct extend list
             modules.extend([
                 nn.Conv2d(inplanes, planes, kernel_size=3,
-                          stride=stride if i == 0 else 1,
+                          stride=stride if i == 0 else 1,  # layer 1st conv use ori stride, successive conv stride=1
                           padding=dilation, bias=False, dilation=dilation),
                 nn.BatchNorm2d(planes, momentum=BN_MOMENTUM),
-                nn.ReLU(inplace=True)])
+                nn.ReLU(inplace=True)
+            ])
             inplanes = planes
         return nn.Sequential(*modules)
 
     def forward(self, x):
         y = []
         x = self.base_layer(x)
+        # print('base:', x.size())
         for i in range(6):
             x = getattr(self, 'level{}'.format(i))(x)
+            # print('level{}:'.format(i), x.size())
             y.append(x)
         return y
 
     def load_pretrained_model(self, data='imagenet', name='dla34', hash='ba72cf86'):
         # fc = self.fc
-        if name.endswith('.pth'):
+        if name.endswith('.pth'):  # dla34-ba72cf86.pth
             model_weights = torch.load(data + name)
         else:
             model_url = get_model_url(data, name, hash)
@@ -309,12 +338,17 @@ class DLA(nn.Module):
 
 
 def dla34(pretrained=True, **kwargs):  # DLA-34
-    model = DLA([1, 1, 1, 2, 2, 1],
-                [16, 32, 64, 128, 256, 512],
-                block=BasicBlock, **kwargs)
+    model = DLA(levels=[1, 1, 1, 2, 2, 1],
+                channels=[16, 32, 64, 128, 256, 512],
+                block=BasicBlock, **kwargs)  # can set more args in a dict way
+    # note: load pretrain on imagenet
     if pretrained:
         model.load_pretrained_model(data='imagenet', name='dla34', hash='ba72cf86')
     return model
+
+
+if __name__ == '__main__':
+    model = dla34(pretrained=False)
 
 
 class Identity(nn.Module):
@@ -390,6 +424,12 @@ class IDAUp(nn.Module):
 
 class DLAUp(nn.Module):
     def __init__(self, startp, channels, scales, in_channels=None):
+        """
+        :param startp: first_level=2, int(np.log2(down_ratio))
+        :param channels: [64, 128, 256, 512]
+        :param scales:   [1,  2,   4,   8]
+        :param in_channels:
+        """
         super(DLAUp, self).__init__()
         self.startp = startp
         if in_channels is None:
@@ -432,16 +472,25 @@ class DLASeg(nn.Module):
                  last_level, head_conv, out_channel=0):
         super(DLASeg, self).__init__()
         assert down_ratio in [2, 4, 8, 16]
-        self.first_level = int(np.log2(down_ratio))
-        self.last_level = last_level
-        self.base = globals()[base_name](pretrained=pretrained)
-        channels = self.base.channels
-        scales = [2 ** i for i in range(len(channels[self.first_level:]))]
-        self.dla_up = DLAUp(self.first_level, channels[self.first_level:], scales)
+        self.first_level = int(np.log2(down_ratio))  # 2
+        self.last_level = last_level  # 5
+
+        # encoder
+        # get dla34(pretrained=pretrained) func
+        # load imagenet pretrain
+        self.base = globals()[base_name](pretrained=pretrained)  # return <class 'models.networks.pose_dla_dcn.DLA'>
+        channels = self.base.channels  # [16, 32, 64, 128, 256, 512], [2:] -> len=4
+        scales = [2 ** i for i in range(len(channels[self.first_level:]))]  # 2**[range(4)]
+
+        # decoder, upsample
+        self.dla_up = DLAUp(startp=self.first_level,  # 2, int(np.log2(down_ratio))
+                            channels=channels[self.first_level:],  # [64, 128, 256, 512]
+                            scales=scales)  # [1, 2, 4, 8]
 
         if out_channel == 0:
-            out_channel = channels[self.first_level]
+            out_channel = channels[self.first_level]  # 64
 
+        # Iterative deep aggregation
         self.ida_up = IDAUp(out_channel, channels[self.first_level:self.last_level],
                             [2 ** i for i in range(self.last_level - self.first_level)])
 
@@ -486,8 +535,16 @@ class DLASeg(nn.Module):
 
 
 def get_pose_net(num_layers, heads, head_conv=256, down_ratio=4):
-    model = DLASeg('dla{}'.format(num_layers), heads,
-                   pretrained=True,
+    """
+    :param num_layers: 34
+    :param heads: {'hm': 80, 'wh': 2, 'reg': 2}
+    :param head_conv: 256
+    :param down_ratio: 4
+    :return:
+    """
+    model = DLASeg('dla{}'.format(num_layers),
+                   heads,
+                   pretrained=True,  # note: default pretrain is True!
                    down_ratio=down_ratio,
                    final_kernel=1,
                    last_level=5,

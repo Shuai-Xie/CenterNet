@@ -10,8 +10,8 @@ import os
 import torch.utils.data as data
 
 
-class Cigar(data.Dataset):
-    num_classes = 20
+class Cigar_Aa(data.Dataset):
+    num_classes = 2
     default_resolution = [512, 512]
     mean = np.array([0.40789654, 0.44719302, 0.47026115],
                     dtype=np.float32).reshape(1, 1, 3)
@@ -19,35 +19,29 @@ class Cigar(data.Dataset):
                    dtype=np.float32).reshape(1, 1, 3)
 
     def __init__(self, opt, split):
-        super(Cigar, self).__init__()
-        dt_name = 'cigar_box'  # todo: rect box
+        super(Cigar_Aa, self).__init__()
+        dt_name = 'cigar_Aa'  # todo: rect box
         self.data_dir = os.path.join(opt.data_dir, dt_name)
         self.img_dir = ''  # as file_name is absolute path
         if split == 'test':
             self.annot_path = os.path.join(
-                self.data_dir, 'annotations',
-                '{}_{}_{}.json').format(Cigar.num_classes, dt_name, split)
+                self.data_dir, 'annotations', '{}_{}.json').format(dt_name, split)
         else:
             if opt.task == 'exdet':  # train or val
                 self.annot_path = os.path.join(
-                    self.data_dir, 'annotations',
-                    '{}_{}_{}.json').format(Cigar.num_classes, dt_name, split)
+                    self.data_dir, 'annotations', '{}_{}.json').format(dt_name, split)
             else:  # ctdet,..?
                 self.annot_path = os.path.join(
-                    self.data_dir, 'annotations',
-                    '{}_{}_{}.json').format(Cigar.num_classes, dt_name, split)
+                    self.data_dir, 'annotations', '{}_{}.json').format(dt_name, split)
 
         self.max_objs = 10
         # self.max_objs = 128
         self.class_name = [
             '__background__',
-            'DaZhongJiu_A', 'YunYan_a', 'JiaoZi_B', 'ZhongHua_B', 'LiQun_a',
-            'HuangHeLou_e', 'YunYan_A', 'JiaoZi_F', 'HuangHeLou_h', 'HuangHeLou_E',
-            'HuangJinYe_C', '555_a', 'HongTaShan_b', 'YuXi_A', 'HuangGuoShu_a',
-            'JiaoZi_K', 'HuangHeLou_A', 'JiaoZi_E', 'TianZi_a', 'TianZi_A'
+            'A', 'a'
         ]
         # note: _valid_ids same to real cat_id in xx.json
-        self._valid_ids = np.arange(1, 21, dtype=np.int32)
+        self._valid_ids = np.arange(1, 3, dtype=np.int32)
         self.cat_ids = {v: i for i, v in enumerate(self._valid_ids)}  # value, idx
         self._data_rng = np.random.RandomState(123)
         self._eig_val = np.array([0.2141788, 0.01817699, 0.00341571],

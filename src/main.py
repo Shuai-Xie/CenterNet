@@ -19,11 +19,13 @@ from models.model import model_layers, model_summary
 
 def main(opt):
     torch.manual_seed(opt.seed)
+    # if add --not_cuda_benchmark, opt.not_cuda_benchmark=True
     torch.backends.cudnn.benchmark = not opt.not_cuda_benchmark and not opt.test
 
     # todo: add cigar dataset here!
     # Dataset class set by dataset and task name
     Dataset = get_dataset(opt.dataset, opt.task)  # return Cigar
+    # <class 'datasets.dataset_factory.get_dataset.<locals>.Dataset'>
     opt = opts().update_dataset_info_and_set_heads(opt, Dataset)
     pprint(vars(opt))
 
@@ -67,7 +69,7 @@ def main(opt):
         Dataset(opt, 'train'),
         batch_size=opt.batch_size,
         shuffle=True,
-        num_workers=opt.num_workers,
+        num_workers=opt.num_workers,  # 多线程预读数据
         pin_memory=True,
         drop_last=True
     )

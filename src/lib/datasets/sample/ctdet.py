@@ -42,24 +42,36 @@ class CTDetDataset(data.Dataset):
 
         # height, width
         height, width = img.shape[0], img.shape[1]
-        c = np.array([img.shape[1] / 2., img.shape[0] / 2.], dtype=np.float32)
-        if self.opt.keep_res:
+        c = np.array([img.shape[1] / 2., img.shape[0] / 2.], dtype=np.float32)  # ori img center
+
+        if self.opt.keep_res:  # False
             input_h = (height | self.opt.pad) + 1
             input_w = (width | self.opt.pad) + 1
             s = np.array([input_w, input_h], dtype=np.float32)
         else:
-            s = max(img.shape[0], img.shape[1]) * 1.0
+            # not keep_res, use opt.input_h, w
+            # note: h != w, ori not keep_res, then set w=h=512
+            # s = max(img.shape[0], img.shape[1]) * 1.0
+            s = np.array([width, height], dtype=np.float32)  # ori img size?
             input_h, input_w = self.opt.input_h, self.opt.input_w
 
         # flip
         flipped = False
+
         if self.split == 'train':
+            # random scale
             if not self.opt.not_rand_crop:
-                s = s * np.random.choice(np.arange(0.6, 1.4, 0.1))
-                w_border = self._get_border(128, img.shape[1])
-                h_border = self._get_border(128, img.shape[0])
-                c[0] = np.random.randint(low=w_border, high=img.shape[1] - w_border)
-                c[1] = np.random.randint(low=h_border, high=img.shape[0] - h_border)
+                # train set opt.not_rand_crop=False, so will use default random scale
+                # s = s * np.random.choice(np.arange(0.4, 0.6, 0.1))  # (1920,1080) -> (640)
+                # note: restrict the img center translate range, lrtb 1/2
+                # w_border = self._get_border(img.shape[1] // 4, img.shape[1])
+                # h_border = self._get_border(img.shape[0] // 4, img.shape[0])
+                # random center, this may translate img so far
+                w_range, h_range = img.shape[1] // 8, img.shape[0] // 8
+                c[0] = np.random.randint(low=img.shape[1] // 2 - w_range,
+                                         high=img.shape[1] // 2 + w_range)
+                c[1] = np.random.randint(low=img.shape[0] // 2 - h_range,
+                                         high=img.shape[0] // 2 + h_range)
             else:
                 sf = self.opt.scale
                 cf = self.opt.shift
@@ -67,16 +79,21 @@ class CTDetDataset(data.Dataset):
                 c[1] += s * np.clip(np.random.randn() * cf, -2 * cf, 2 * cf)
                 s = s * np.clip(np.random.randn() * sf + 1, 1 - sf, 1 + sf)
 
-            if np.random.random() < self.opt.flip:
+            # random flip
+            if np.random.random() < self.opt.flip:  # 0.5
                 flipped = True
                 img = img[:, ::-1, :]
                 c[0] = width - c[0] - 1
 
-        # affine transform img to input size
+        # trans ori img to input size
         trans_input = get_affine_transform(c, s, 0, [input_w, input_h])
+        # use generated trans_input matrix to trans img
         inp = cv2.warpAffine(img, trans_input,
                              (input_w, input_h),
                              flags=cv2.INTER_LINEAR)
+        # note: see trans img
+        # print('scale:', s, 'center:', c)
+        # cv2.imwrite('{}_img_trans.png'.format(img_id), inp)
         inp = (inp.astype(np.float32) / 255.)
 
         # color augment
@@ -92,10 +109,10 @@ class CTDetDataset(data.Dataset):
         output_w = input_w // self.opt.down_ratio
         num_classes = self.num_classes
 
-        # affine transform output
+        # trans ori img box to output size
         trans_output = get_affine_transform(c, s, 0, [output_w, output_h])
 
-        hm = np.zeros((num_classes, output_h, output_w), dtype=np.float32)
+        hm = np.zeros((num_classes, output_h, output_w), dtype=np.float32)  # 20
         # todo: dense or sparse wh
         wh = np.zeros((self.max_objs, 2), dtype=np.float32)  # (10,2) sparse!
         dense_wh = np.zeros((2, output_h, output_w), dtype=np.float32)  # dense!
@@ -106,6 +123,7 @@ class CTDetDataset(data.Dataset):
         cat_spec_mask = np.zeros((self.max_objs, num_classes * 2), dtype=np.uint8)
 
         # msra, umich
+        # opt.mse_loss = False
         draw_gaussian = draw_msra_gaussian if self.opt.mse_loss else draw_umich_gaussian
 
         # GT
@@ -118,17 +136,20 @@ class CTDetDataset(data.Dataset):
             if flipped:
                 bbox[[0, 2]] = width - bbox[[2, 0]] - 1
 
-            # transform box to output
+            # transform box 2 pts to output
             bbox[:2] = affine_transform(bbox[:2], trans_output)
             bbox[2:] = affine_transform(bbox[2:], trans_output)
             bbox[[0, 2]] = np.clip(bbox[[0, 2]], 0, output_w - 1)
             bbox[[1, 3]] = np.clip(bbox[[1, 3]], 0, output_h - 1)
 
-            # todo: rotated box w,h not in this way
-            h, w = bbox[3] - bbox[1], bbox[2] - bbox[0]
+            # todo: redefine the center and w,h
+            h, w = bbox[3] - bbox[1], bbox[2] - bbox[0]  # x1y1x2y2
             if h > 0 and w > 0:
-                radius = gaussian_radius((math.ceil(h), math.ceil(w)))
-                radius = max(0, int(radius))
+                # note: radius generated with spatial extent info from h,w
+                radius = gaussian_radius(det_size=(math.ceil(h), math.ceil(w)))
+                radius = max(0, int(math.ceil(radius / 3)))
+                # radius = max(0, int(radius))
+                # opt.mse_loss = False
                 radius = self.opt.hm_gauss if self.opt.mse_loss else radius
                 # center
                 ct = np.array([(bbox[0] + bbox[2]) / 2,
@@ -137,8 +158,8 @@ class CTDetDataset(data.Dataset):
                 draw_gaussian(hm[cls_id], ct_int, radius)
                 # label of w,h
                 wh[k] = 1. * w, 1. * h
-                ind[k] = ct_int[1] * output_w + ct_int[0]
-                reg[k] = ct - ct_int
+                ind[k] = ct_int[1] * output_w + ct_int[0]  # 1D ind
+                reg[k] = ct - ct_int  # float - int
                 reg_mask[k] = 1
                 cat_spec_wh[k, cls_id * 2: cls_id * 2 + 2] = wh[k]
                 cat_spec_mask[k, cls_id * 2: cls_id * 2 + 2] = 1
@@ -146,7 +167,6 @@ class CTDetDataset(data.Dataset):
                     draw_dense_reg(dense_wh, hm.max(axis=0), ct_int, wh[k], radius)
                 gt_det.append([ct[0] - w / 2, ct[1] - h / 2,
                                ct[0] + w / 2, ct[1] + h / 2, 1, cls_id])
-
         ret = {
             'input': inp,
             'hm': hm,
@@ -154,7 +174,13 @@ class CTDetDataset(data.Dataset):
             'ind': ind,
             'wh': wh
         }
-        if self.opt.dense_wh:
+
+        # from utils.plt_utils import plt_heatmaps
+        # note: see heatmaps
+        # plt_heatmaps(hm, basename='{}_hm'.format(img_id))
+        # print(wh)
+
+        if self.opt.dense_wh:  # False
             hm_a = hm.max(axis=0, keepdims=True)
             dense_wh_mask = np.concatenate([hm_a, hm_a], axis=0)
             ret.update({'dense_wh': dense_wh, 'dense_wh_mask': dense_wh_mask})

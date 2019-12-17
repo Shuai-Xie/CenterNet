@@ -32,29 +32,42 @@ def get_affine_transform(center,
                          output_size,
                          shift=np.array([0, 0], dtype=np.float32),
                          inv=0):
+    """
+    use 3 pairs points to get trans matrix
+    :param center: translated img center
+    :param scale: ori [width, height]
+    :param rot: 0
+    :param output_size: [input_w, input_h]
+    :param shift:
+    :param inv:
+    :return:
+    """
     if not isinstance(scale, np.ndarray) and not isinstance(scale, list):
-        scale = np.array([scale, scale], dtype=np.float32)
+        scale = np.array([scale, scale], dtype=np.float32)  # w=h
 
     scale_tmp = scale
-    src_w = scale_tmp[0]
-    dst_w = output_size[0]
-    dst_h = output_size[1]
+    src_w = scale_tmp[0]  # src img width
 
+    dst_w, dst_h = output_size
+
+    # direction
     rot_rad = np.pi * rot / 180
     src_dir = get_dir([0, src_w * -0.5], rot_rad)
     dst_dir = np.array([0, dst_w * -0.5], np.float32)
 
     src = np.zeros((3, 2), dtype=np.float32)
     dst = np.zeros((3, 2), dtype=np.float32)
-    src[0, :] = center + scale_tmp * shift
+
+    # 3 pts, 根据变换前后三个点的对应关系来自动求解 trans matrix
+    src[0, :] = center + scale_tmp * shift  # src center
     src[1, :] = center + src_dir + scale_tmp * shift
-    dst[0, :] = [dst_w * 0.5, dst_h * 0.5]
+    dst[0, :] = [dst_w * 0.5, dst_h * 0.5]  # dst center
     dst[1, :] = np.array([dst_w * 0.5, dst_h * 0.5], np.float32) + dst_dir
 
     src[2:, :] = get_3rd_point(src[0, :], src[1, :])
     dst[2:, :] = get_3rd_point(dst[0, :], dst[1, :])
 
-    if inv:
+    if inv:  # trans back
         trans = cv2.getAffineTransform(np.float32(dst), np.float32(src))
     else:
         trans = cv2.getAffineTransform(np.float32(src), np.float32(dst))
@@ -97,6 +110,7 @@ def crop(img, center, scale, output_size, rot=0):
 def gaussian_radius(det_size, min_overlap=0.7):
     height, width = det_size
 
+    # ax^2 + bx + c = 0
     a1 = 1
     b1 = (height + width)
     c1 = width * height * (1 - min_overlap) / (1 + min_overlap)
@@ -114,6 +128,7 @@ def gaussian_radius(det_size, min_overlap=0.7):
     c3 = (min_overlap - 1) * width * height
     sq3 = np.sqrt(b3 ** 2 - 4 * a3 * c3)
     r3 = (b3 + sq3) / 2
+
     return min(r1, r2, r3)
 
 
@@ -134,14 +149,20 @@ def draw_umich_gaussian(heatmap, center, radius, k=1):
 
     height, width = heatmap.shape[0:2]
 
+    # 4 direction bounds
     left, right = min(x, radius), min(width - x, radius + 1)
     top, bottom = min(y, radius), min(height - y, radius + 1)
 
+    # get this rect from heatmap
     masked_heatmap = heatmap[y - top:y + bottom, x - left:x + right]
+    # get this rect from gaussian
     masked_gaussian = gaussian[radius - top:radius + bottom, radius - left:radius + right]
+
     if min(masked_gaussian.shape) > 0 and min(masked_heatmap.shape) > 0:  # TODO debug
+        # out the max of (heatmap, gaussian) to heatmap
         np.maximum(masked_heatmap, masked_gaussian * k, out=masked_heatmap)
-    return heatmap
+
+    return heatmap  # add a new obj's gaussian range
 
 
 def draw_dense_reg(regmap, heatmap, center, value, radius, is_offset=False):

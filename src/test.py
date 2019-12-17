@@ -42,8 +42,8 @@ class PrefetchDataset(torch.utils.data.Dataset):
             else:
                 images[scale], meta[scale] = self.pre_process_func(image, scale)
         return img_id, {
-            'images': images,  # scaled imgs
-            'image': image,  # np img
+            'images': images,  # scale and affine_trans imgs
+            'image': image,  # ori read np img
             'meta': meta  # affine trans
         }
 
@@ -67,7 +67,7 @@ def prefetch_test(opt):
 
     # preprocess dataset
     data_loader = torch.utils.data.DataLoader(
-        PrefetchDataset(opt, dataset, detector.pre_process),
+        PrefetchDataset(opt, dataset, detector.pre_process),  # base_detector.pre_process(), will trans to input size
         batch_size=1,
         shuffle=False,
         num_workers=1,
@@ -83,6 +83,7 @@ def prefetch_test(opt):
 
     for ind, (img_id, pre_processed_images) in enumerate(data_loader):
         ret = detector.run(pre_processed_images)
+        # get results from ret dict
         results[img_id.numpy().astype(np.int32)[0]] = ret['results']
         Bar.suffix = '[{0}/{1}]|Tot: {total:} |ETA: {eta:} '.format(
             ind, num_iters, total=bar.elapsed_td, eta=bar.eta_td)
@@ -91,6 +92,7 @@ def prefetch_test(opt):
             Bar.suffix = Bar.suffix + '|{} {tm.val:.3f}s ({tm.avg:.3f}s) '.format(
                 t, tm=avg_time_stats[t])
         bar.next()
+
     bar.finish()
     # run eval!
     dataset.run_eval(results, opt.save_dir)
@@ -112,6 +114,8 @@ def test(opt):
 
     results = {}
     num_iters = len(dataset)
+
+    # progress bar
     bar = Bar('{}'.format(opt.exp_id), max=num_iters)
     time_stats = ['tot', 'load', 'pre', 'net', 'dec', 'post', 'merge']
     avg_time_stats = {t: AverageMeter() for t in time_stats}

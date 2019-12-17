@@ -47,10 +47,10 @@ def create_model(arch, heads, head_conv):
     :param head_conv: 64, if set>0, do one more conv in head, not directly conv to result
     """
     num_layers = int(arch[arch.find('_') + 1:]) if '_' in arch else 0  # 18, find return val + list
-    arch = arch[:arch.find('_')] if '_' in arch else arch  # dla
-    get_model = _model_factory[arch]
+    arch = arch[:arch.find('_')] if '_' in arch else arch  # res_18 or dla
+    get_model = _model_factory[arch]  # get model class!
     model = get_model(num_layers=num_layers,  # total layers of a model, layer = CBR, POOL
-                      heads=heads, head_conv=head_conv)
+                      heads=heads, head_conv=head_conv)  # 64 res, 256 DLA
     return model
 
 

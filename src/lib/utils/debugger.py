@@ -51,6 +51,8 @@ class Debugger(object):
             self.names = pascal_class_name
         elif dataset == 'cigar':  # todo: add your dataset class_name in the end of this py
             self.names = cigar_class_name
+        elif dataset == 'cigar_Aa':
+            self.names = ['A', 'a']
         elif dataset == 'gta':
             self.names = gta_class_name
             self.focal_length = 935.3074360871937
@@ -81,7 +83,7 @@ class Debugger(object):
 
     def add_mask(self, mask, bg, imgId='default', trans=0.8):
         self.imgs[imgId] = (mask.reshape(
-            mask.shape[0], mask.shape[1], 1) * 255 * trans + \
+            mask.shape[0], mask.shape[1], 1) * 255 * trans +
                             bg * (1 - trans)).astype(np.uint8)
 
     def show_img(self, pause=False, imgId='default'):
@@ -474,11 +476,10 @@ cigar_class_name_cn = [
 ]
 
 cigar_class_name = [
-    'DaChongJiu_A', 'YunYan_a', 'JiaoZi_B', 'ZhongHua_B',
-    'LiQun_a', 'HuangHeLou_e', 'JiaoZi_F', 'YunYan_A',
-    'HuangHeLou_h', 'HuangHeLou_E', 'HuangJinYe_C', '555_a',
-    'HongTaShan_b', 'YuXi_A', 'JiaoZi_K', 'HuangHeLou_A',
-    'JiaoZi_E', 'TianZi_a', 'TianZi_A', 'WangGuan_A'
+    'DaZhongJiu_A', 'YunYan_a', 'JiaoZi_B', 'ZhongHua_B', 'LiQun_a',
+    'HuangHeLou_e', 'YunYan_A', 'JiaoZi_F', 'HuangHeLou_h', 'HuangHeLou_E',
+    'HuangJinYe_C', '555_a', 'HongTaShan_b', 'YuXi_A', 'HuangGuoShu_a',
+    'JiaoZi_K', 'HuangHeLou_A', 'JiaoZi_E', 'TianZi_a', 'TianZi_A'
 ]
 
 color_list = np.array(

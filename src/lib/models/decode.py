@@ -118,39 +118,42 @@ def _topk_channel(scores, K=40):
 
 def _topk(scores, K=40):
     """
-    inference stage
-    :param scores: nms(sigmoid(hm))
-    :param K:
-    :return:
+    note: inference stage
+    :param scores: nms(sigmoid(hm)) [B,C,H,W]
+    :param K: top k
     """
     batch, cat, height, width = scores.size()
 
-    # topk 1: get K objects of each cat, rational, as max_num of each cat is K
-    # flat h*w, cus topk fn cal last dim
+    # topk 1: get K objects of each cat, rational, as the max objs of each cat is K
+    # flat h*w, cus topk fn operates on last dim
     topk_scores, topk_inds = torch.topk(scores.view(batch, cat, -1), K)  # default dim=-1
     # topk_scores: [B,C,K]
     # topk_inds: [B,C,K] val~(0, h*w)
+    # topk_ys: [B,C,K]
+    # topk_xs: [B,C,K]
 
     # get top (x,y) from top inds
+    # position in scores
     topk_inds = topk_inds % (height * width)
     topk_ys = (topk_inds / width).int().float()
     topk_xs = (topk_inds % width).int().float()
 
     # topk 2: get K objects of total cat
-    topk_score, topk_ind = torch.topk(topk_scores.view(batch, -1), K)  # flat C*K
+    # topk_ind is the position in topk_scores
+    # then we use _gather_feat() to get the `inds` and `xs,ys` in topk_scores, topk_inds
+    topk_score, topk_ind = torch.topk(topk_scores.view(batch, -1), K)  # flat C*K, all cats
     # topk_score: [B,K]
-    # topk_ind: [B,K]
+    # topk_ind: [B,K] val ~ [0, C*K], as flatten C*K
 
-    # get the cls of topk objs belong to, may repeat
-    topk_clses = (topk_ind / K).int()  # /K as last dim=K, topk_ind ~(0, C*K)
+    # /K get the cls of topk objs belong to, may repeat
+    topk_clses = (topk_ind / K).int()
 
-    # recover ind to inds, cus topk_ind has lost the ind in ori hm
-    # match topk_ind to topk_inds
+    # use topk_ind to fetch hm position in topk_inds
     # topk_inds has topk ind in each cat hm
     # topk_ind has topk ind in all cat hm
     topk_inds = _gather_feat(topk_inds.view(batch, -1, 1), topk_ind).view(batch, K)  # [B,K]
-    topk_ys = _gather_feat(topk_ys.view(batch, -1, 1), topk_ind).view(batch, K)
-    topk_xs = _gather_feat(topk_xs.view(batch, -1, 1), topk_ind).view(batch, K)
+    topk_ys = _gather_feat(topk_ys.view(batch, -1, 1), topk_ind).view(batch, K)  # [B,K]
+    topk_xs = _gather_feat(topk_xs.view(batch, -1, 1), topk_ind).view(batch, K)  # [B,K]
 
     return topk_score, topk_inds, topk_clses, topk_ys, topk_xs
 
@@ -169,6 +172,7 @@ def agnex_ct_decode(
     r_heat  = torch.sigmoid(r_heat)
     ct_heat = torch.sigmoid(ct_heat)
     '''
+
     if aggr_weight > 0:
         t_heat = _h_aggregate(t_heat, aggr_weight=aggr_weight)
         l_heat = _v_aggregate(l_heat, aggr_weight=aggr_weight)
@@ -496,7 +500,7 @@ def ddd_decode(heat, rot, depth, dim, wh=None, reg=None, K=40):
     return detections
 
 
-from utils.my_utils import plt_heatmaps, cat_conf_point_stats
+# from utils.plt_utils import plt_heatmaps, cat_conf_point_stats
 
 
 def ctdet_decode(heat, wh, reg=None, cat_spec_wh=False, K=100):
@@ -514,9 +518,10 @@ def ctdet_decode(heat, wh, reg=None, cat_spec_wh=False, K=100):
     # perform nms on heatmaps
     heat = _nms(heat)
 
-    # plt_heatmaps(heat)
-
+    # directly get the score = sigmoid(gm)
+    # doesn't use softmax, so the score is low
     scores, inds, clses, ys, xs = _topk(heat, K=K)
+    # center x,y; cls
 
     # xy center
     if reg is not None:
@@ -529,7 +534,7 @@ def ctdet_decode(heat, wh, reg=None, cat_spec_wh=False, K=100):
         ys = ys.view(batch, K, 1) + 0.5
 
     # wh
-    wh = _tranpose_and_gather_feat(wh, inds)
+    wh = _tranpose_and_gather_feat(wh, inds)  # [B,2,H,W]
     if cat_spec_wh:
         wh = wh.view(batch, K, cat, 2)
         clses_ind = clses.view(batch, K, 1, 1).expand(batch, K, 1, 2).long()

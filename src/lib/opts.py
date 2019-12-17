@@ -33,6 +33,7 @@ class opts(object):
                                  help='path to image/, image folders/, video, or webcam')
         self.parser.add_argument('--load_model', default='',
                                  help='path to pretrained model')
+        # --resume will load model_last
         self.parser.add_argument('--resume', action='store_true',
                                  help='resume an experiment. '
                                       'Reloaded the optimizer parameter and '
@@ -72,7 +73,7 @@ class opts(object):
                                  help='conv layer channels for output head'
                                       '0 for no conv layer'
                                       '-1 for default setting: '
-                                      '64 for resnets and 256 for dla.')
+                                      '64 for resnet and 256 for dla.')
         self.parser.add_argument('--down_ratio', type=int, default=4,  # 1/4 out feature
                                  help='output stride. Currently only supports 4.')
 
@@ -92,7 +93,7 @@ class opts(object):
                                  help='drop learning rate by 10.')
         self.parser.add_argument('--num_epochs', type=int, default=140,
                                  help='total training epochs.')
-        self.parser.add_argument('--batch_size', type=int, default=32,  # todo: batch size so big!
+        self.parser.add_argument('--batch_size', type=int, default=32,
                                  help='batch size')
         self.parser.add_argument('--master_batch_size', type=int, default=-1,
                                  help='batch size on the master gpu.')
@@ -111,7 +112,7 @@ class opts(object):
                                  help='multi scale test augmentation.')
         self.parser.add_argument('--nms', action='store_true',
                                  help='run nms in testing.')
-        self.parser.add_argument('--K', type=int, default=100,
+        self.parser.add_argument('--K', type=int, default=10,  # note: change to 10
                                  help='max number of output objects.')
         self.parser.add_argument('--not_prefetch_test', action='store_true',
                                  help='not use parallal data pre-processing.')
@@ -122,12 +123,13 @@ class opts(object):
                                  help='keep the original resolution'
                                       ' during validation.')
         self.parser.add_argument('--use', type=str, default='last',
-                                 help='[last|best] used model to test.')
+                                 help='[last|best] model to test.')
 
         # dataset
         self.parser.add_argument('--not_rand_crop', action='store_true',
                                  help='not use the random crop data augmentation'
                                       'from CornerNet.')
+        # default aug if not use rand crop
         self.parser.add_argument('--shift', type=float, default=0.1,
                                  help='when not using random crop'
                                       'apply shift augmentation.')
@@ -137,6 +139,7 @@ class opts(object):
         self.parser.add_argument('--rotate', type=float, default=0,
                                  help='when not using random crop'
                                       'apply rotation augmentation.')
+        # flip and color aug
         self.parser.add_argument('--flip', type=float, default=0.5,
                                  help='probability of applying flip augmentation.')
         self.parser.add_argument('--no_color_aug', action='store_true',
@@ -162,6 +165,7 @@ class opts(object):
         # ctdet
         self.parser.add_argument('--reg_loss', default='l1',
                                  help='regression loss: sl1 | l1 | l2')
+        # weights of 3 part loss
         self.parser.add_argument('--hm_weight', type=float, default=1,
                                  help='loss weight for keypoint heatmaps.')
         self.parser.add_argument('--off_weight', type=float, default=1,
@@ -296,7 +300,7 @@ class opts(object):
         # todo: --resume will set --load_model as last/best
         if opt.resume and opt.load_model == '':
             model_path = opt.save_dir[:-4] if opt.save_dir.endswith('TEST') else opt.save_dir
-            opt.load_model = os.path.join(model_path, 'model_{}.pth'.format(opt.use))
+            opt.load_model = os.path.join(model_path, 'model_{}.pth'.format(opt.use))  # defalt use last
 
         return opt
 
@@ -306,7 +310,7 @@ class opts(object):
         :param dataset: class in init(), or a class of lib.datsets.dataset.cigar.py
         """
         # info from dataset dict
-        input_h, input_w = dataset.default_resolution
+        input_h, input_w = dataset.default_resolution  # default input h,w
         opt.mean, opt.std = dataset.mean, dataset.std
         opt.num_classes = dataset.num_classes
 
@@ -374,7 +378,6 @@ class opts(object):
                 opt.heads.update({'hp_offset': 2})
         else:
             assert 0, 'task not defined!'
-        print('heads', opt.heads)
         return opt
 
     def init(self, args=''):

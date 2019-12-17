@@ -8,6 +8,7 @@ from .sample.ctdet import CTDetDataset
 from .sample.multi_pose import MultiPoseDataset
 
 from .dataset.cigar import Cigar  # add cigar
+from .dataset.cigar_Aa import Cigar_Aa
 from .dataset.coco import COCO
 from .dataset.pascal import PascalVOC
 from .dataset.kitti import KITTI
@@ -15,6 +16,7 @@ from .dataset.coco_hp import COCOHP
 
 dataset_factory = {
     'cigar': Cigar,
+    'cigar_Aa': Cigar_Aa,
     'coco': COCO,
     'pascal': PascalVOC,
     'kitti': KITTI,
