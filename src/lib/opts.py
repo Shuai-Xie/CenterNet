@@ -309,12 +309,13 @@ class opts(object):
         :param opt:
         :param dataset: class in init(), or a class of lib.datsets.dataset.cigar.py
         """
-        # info from dataset dict
+        # info defined in dataset dict
         input_h, input_w = dataset.default_resolution  # default input h,w
         opt.mean, opt.std = dataset.mean, dataset.std
         opt.num_classes = dataset.num_classes
 
-        # input res priority: opt.input_h, opt.input_w > opt.input_res
+        # update dataset default info if opt set
+        # input_res priority: opt.input_h, opt.input_w > opt.input_res
         input_h = opt.input_res if opt.input_res > 0 else input_h
         input_w = opt.input_res if opt.input_res > 0 else input_w
         opt.input_h = opt.input_h if opt.input_h > 0 else input_h
@@ -324,7 +325,7 @@ class opts(object):
         opt.input_res = max(opt.input_h, opt.input_w)
         opt.output_res = max(opt.output_h, opt.output_w)
 
-        # todo: opt.heads
+        # note: set opt.heads by task, so if change to ctdet_offset, update here
         if opt.task == 'exdet':
             # assert opt.dataset in ['coco']
             num_hm = 1 if opt.agnostic_ex else opt.num_classes
@@ -354,7 +355,7 @@ class opts(object):
                 opt.heads.update({'wh': 2})
             if opt.reg_offset:  # regress box center
                 opt.heads.update({'reg': 2})
-        elif opt.task == 'ctdet':
+        elif 'ctdet' in opt.task:  # note: use ctdet heads if task = ['ctdet_offset', 'ctdet_blobs']
             # assert opt.dataset in ['pascal', 'coco']
             opt.heads = {
                 'hm': opt.num_classes,  # heatmap

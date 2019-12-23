@@ -4,6 +4,8 @@ from __future__ import print_function
 
 import torch.utils.data as data
 import numpy as np
+import torch
+import json
 import cv2
 import os
 from utils.image import flip, color_aug
@@ -111,7 +113,7 @@ class CTDetDataset(data.Dataset):
         trans_output = get_affine_transform(c, s, 0, [output_w, output_h])
 
         hm = np.zeros((num_classes, output_h, output_w), dtype=np.float32)  # 20
-        # todo: dense or sparse wh
+        # note: dense or sparse wh
         wh = np.zeros((self.max_objs, 2), dtype=np.float32)  # (10,2) sparse!
         dense_wh = np.zeros((2, output_h, output_w), dtype=np.float32)  # dense!
         reg = np.zeros((self.max_objs, 2), dtype=np.float32)  # (10,2)
@@ -140,7 +142,6 @@ class CTDetDataset(data.Dataset):
             bbox[[0, 2]] = np.clip(bbox[[0, 2]], 0, output_w - 1)
             bbox[[1, 3]] = np.clip(bbox[[1, 3]], 0, output_h - 1)
 
-            # todo: redefine the center and w,h
             h, w = bbox[3] - bbox[1], bbox[2] - bbox[0]  # x1y1x2y2
             if h > 0 and w > 0:
                 # note: radius generated with spatial extent info from h,w

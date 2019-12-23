@@ -11,9 +11,10 @@ from utils.image import get_affine_transform, affine_transform
 from utils.image import gaussian_radius, draw_umich_gaussian, draw_msra_gaussian
 from utils.image import draw_dense_reg
 import math
+from shapely.geometry.polygon import Polygon
 
 
-class CTDetDataset(data.Dataset):
+class CTDetOffset_Dataset(data.Dataset):
     def _coco_box_to_bbox(self, box):
         # xywh -> x1y1x2y2
         bbox = np.array([box[0], box[1],
@@ -26,6 +27,11 @@ class CTDetDataset(data.Dataset):
         while size - border // i <= border // i:
             i *= 2
         return border // i
+
+    def _get_polygon_center(self, segmentation):
+        polygon = Polygon(segmentation)  # np (-1,2) 也可以
+        x, y = polygon.centroid.xy  # x_array, y_array
+        return x[0], y[0]
 
     def __getitem__(self, index):
         img_id = self.images[index]
@@ -56,6 +62,7 @@ class CTDetDataset(data.Dataset):
         # flip
         flipped = False
 
+        # get scale and center to do affine transform
         if self.split == 'train':
             # random scale
             if not self.opt.not_rand_crop:
@@ -110,8 +117,9 @@ class CTDetDataset(data.Dataset):
         # trans ori img box to output size
         trans_output = get_affine_transform(c, s, 0, [output_w, output_h])
 
+        # draw gaussian core on heatmap
         hm = np.zeros((num_classes, output_h, output_w), dtype=np.float32)  # 20
-        # todo: dense or sparse wh
+        # dense or sparse wh regress
         wh = np.zeros((self.max_objs, 2), dtype=np.float32)  # (10,2) sparse!
         dense_wh = np.zeros((2, output_h, output_w), dtype=np.float32)  # dense!
         reg = np.zeros((self.max_objs, 2), dtype=np.float32)  # (10,2)
@@ -128,11 +136,13 @@ class CTDetDataset(data.Dataset):
         gt_det = []
         for k in range(num_objs):
             ann = anns[k]
-            bbox = self._coco_box_to_bbox(ann['bbox'])  # xywh -> x1y1x2y2
+            bbox = self._coco_box_to_bbox(ann['bbox'])  # xywh -> x1y1x2y2; shape (4,)
+            segmentation = np.array(ann['segmentation'][0]).reshape((-1, 2))  # x,y
             # map ori cat_id (whatever) to [0, num_class-1]
             cls_id = int(self.cat_ids[ann['category_id']])  # self.cat_ids in cigar.py
             if flipped:
-                bbox[[0, 2]] = width - bbox[[2, 0]] - 1
+                bbox[[0, 2]] = width - bbox[[2, 0]] - 1  # [0,2],
+                segmentation[:, 0] = width - segmentation[:, 0] - 1  # flip x
 
             # transform box 2 pts to output
             bbox[:2] = affine_transform(bbox[:2], trans_output)
@@ -140,8 +150,13 @@ class CTDetDataset(data.Dataset):
             bbox[[0, 2]] = np.clip(bbox[[0, 2]], 0, output_w - 1)
             bbox[[1, 3]] = np.clip(bbox[[1, 3]], 0, output_h - 1)
 
-            # todo: redefine the center and w,h
             h, w = bbox[3] - bbox[1], bbox[2] - bbox[0]  # x1y1x2y2
+
+            # transform segmentation, just trans polygon_center is enough
+            polygon_center = self._get_polygon_center(segmentation)
+            polygon_center = affine_transform(polygon_center, trans_output)
+            print(polygon_center)
+
             if h > 0 and w > 0:
                 # note: radius generated with spatial extent info from h,w
                 radius = gaussian_radius(det_size=(math.ceil(h), math.ceil(w)))
@@ -149,22 +164,31 @@ class CTDetDataset(data.Dataset):
                 # radius = max(0, int(radius))
                 # opt.mse_loss = False
                 radius = self.opt.hm_gauss if self.opt.mse_loss else radius
-                # center
-                ct = np.array([(bbox[0] + bbox[2]) / 2,
-                               (bbox[1] + bbox[3]) / 2], dtype=np.float32)
+                # box center
+                box_center = np.array([(bbox[0] + bbox[2]) / 2,
+                                       (bbox[1] + bbox[3]) / 2], dtype=np.float32)
+                print(box_center)
+                # note: change ct to polygon center
+                ct = polygon_center
                 ct_int = ct.astype(np.int32)
                 draw_gaussian(hm[cls_id], ct_int, radius)
                 # label of w,h
                 wh[k] = 1. * w, 1. * h
-                ind[k] = ct_int[1] * output_w + ct_int[0]  # 1D ind
-                reg[k] = ct - ct_int  # float - int
+                ind[k] = ct_int[1] * output_w + ct_int[0]  # 1D ind of ct position
+                # note: update offset
+                reg[k] = box_center - ct_int  # float_box_center - int_polygon_center
+                print('offset:', reg[k])
                 reg_mask[k] = 1
                 cat_spec_wh[k, cls_id * 2: cls_id * 2 + 2] = wh[k]
                 cat_spec_mask[k, cls_id * 2: cls_id * 2 + 2] = 1
                 if self.opt.dense_wh:
                     draw_dense_reg(dense_wh, hm.max(axis=0), ct_int, wh[k], radius)
+
+                # use box_center to compute box
+                ct = box_center.astype(np.int32)
                 gt_det.append([ct[0] - w / 2, ct[1] - h / 2,
                                ct[0] + w / 2, ct[1] + h / 2, 1, cls_id])
+
         ret = {
             'input': inp,
             'hm': hm,

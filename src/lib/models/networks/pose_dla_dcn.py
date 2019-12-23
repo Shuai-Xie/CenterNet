@@ -495,7 +495,7 @@ class DLASeg(nn.Module):
                             [2 ** i for i in range(self.last_level - self.first_level)])
 
         self.heads = heads
-        for head in self.heads:
+        for head in self.heads:  # {'hm': 80, 'wh': 2, 'reg': 2}
             classes = self.heads[head]
             if head_conv > 0:
                 fc = nn.Sequential(
@@ -504,8 +504,9 @@ class DLASeg(nn.Module):
                     nn.ReLU(inplace=True),
                     nn.Conv2d(head_conv, classes,
                               kernel_size=final_kernel, stride=1,
-                              padding=final_kernel // 2, bias=True))
-                if 'hm' in head:
+                              padding=final_kernel // 2, bias=True)
+                )
+                if 'hm' in head:  # hm layer last conv with bias
                     fc[-1].bias.data.fill_(-2.19)
                 else:
                     fill_fc_weights(fc)

@@ -129,6 +129,7 @@ def load_model(model, model_path,
 
 
 def save_model(path, epoch, model, optimizer=None):
+    # model = { 'epoch': , 'state_dict': , 'optimizer' }
     if isinstance(model, torch.nn.DataParallel):
         state_dict = model.module.state_dict()  # convert data_parallal to model
     else:
